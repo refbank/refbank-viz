@@ -20,6 +20,23 @@ print(names(chat_csv))
 print(nrow(chat_csv))
 length(unique(chat_csv$gameId))
 ```
+```{r}
+library(dplyr)
+
+rep_df <- chat_csv %>%
+  group_by(gameId, repNum) %>%
+  summarise(total_num_words = sum(total_num_words, na.rm = TRUE), .groups = "drop")
+
+
+
+trial_df <- chat_csv %>%
+  group_by(gameId, trialNum) %>%
+  summarise(total_num_words = sum(total_num_words, na.rm = TRUE), .groups = "drop")
+
+
+```
+
+
 Let's analyze data from each game
 
 ```{r}
@@ -29,6 +46,37 @@ ggplot(chat_csv, aes(x = gameId, y = total_num_words, fill = repNum)) +
   labs(title = "Sum of Words Per Game", x = "gameId", y = "Total Number of Words") +
   theme_minimal()
 ```
+
+```{r}
+chat_csv
+
+```
+
+```{r}
+```
+
+
+```{r}
+ggplot(rep_df, aes(x = repNum, y = total_num_words, color = as.factor(gameId), group = gameId)) +
+  geom_line() +
+  geom_point() +
+  geom_smooth(aes(group = 1), method = "lm", se = TRUE, color = "black", linetype = "dashed") +  # Regression line
+  labs(title = "Total Number of Words Per Repetition", x = "Repetition Number", y = "Total Number of Words", color = NULL) +
+  theme_minimal() +
+  theme(legend.position = "none")  # Hide legend but keep colors distinct
+```
+
+
+```{r}
+ggplot(trial_df, aes(x = trialNum, y = total_num_words, color = as.factor(gameId), group = gameId)) +
+  geom_line() +
+  geom_point() +
+  geom_smooth(aes(group = 1), method = "lm", se = TRUE, color = "black", linetype = "dashed") +  # Regression line
+  labs(title = "Total Number of Words Per Trial", x = "Trial Number", y = "Total Number of Words", color = NULL) +
+  theme_minimal() +
+  theme(legend.position = "none")  # Hide legend but keep colors distinct
+```
+
 ```{r}
 # Filter rows where 'submitted' and 'correct' are both TRUE and not NA
 filtered_data <- chat_csv[!is.na(chat_csv$submitted) & !is.na(chat_csv$correct) &
@@ -59,6 +107,7 @@ ggplot(avg_accuracy, aes(x = factor(repNum), y = accuracy, fill = factor(repNum)
   labs(x = "Rep Num", y = "Average Accuracy", fill = "Rep Num", title = "Average Accuracy by RepNum") +
   theme_minimal()
 ```
+
 ```{r}
 reaction_time <- chat_csv[!is.na(chat_csv$time),]
 avg_time <- aggregate(time ~ repNum, data = reaction_time, FUN = mean)
