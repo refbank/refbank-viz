@@ -76,6 +76,27 @@ ggplot(trial_df, aes(x = trialNum, y = total_num_words, color = as.factor(gameId
   theme_minimal() +
   theme(legend.position = "none")  # Hide legend but keep colors distinct
 ```
+```{r}
+library(ggplot2)
+library(ggpubr)  # For adding regression line with confidence intervals
+
+# Assuming new_df is your dataframe with columns: repNum, total_num_words, gameId
+
+# Create the plot
+ggplot(chat_csv, aes(x = repNum, y = total_num_words, color = as.factor(gameId), group = gameId)) +
+  geom_line() +  # Line connecting points for each game
+  geom_point() +  # Individual data points
+  geom_smooth(method = "lm", se = TRUE, alpha = 0.2) +  # Regression line with confidence interval
+  labs(
+    title = "Total Number of Words Per Trial", 
+    x = "Repetition Number", 
+    y = "Total Number of Words", 
+    color = NULL
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none") 
+```
+
 
 ```{r}
 # Filter rows where 'submitted' and 'correct' are both TRUE and not NA
@@ -116,6 +137,21 @@ ggplot(avg_time, aes(x = factor(repNum), y = time, fill = factor(repNum))) +
   labs(x = "Rep Num", y = "Average Time", fill = "Rep Num", title = "Average Time by RepNum") +
   theme_minimal()
 ```
+```{r}
+library(readr)
+addr <- "C:\\Users\\zihan\\Downloads\\tangrams_harmonized.csv.zip"
+csv_file_name <- "tangrams_harmonized.csv"
+
+harmonized_csv <- read_csv(unz(addr, csv_file_name), show_col_types = FALSE)
+head(harmonized_csv,10)
+
+```
+
+
+
+
+
+
 
 ## Test out R shiny
 
