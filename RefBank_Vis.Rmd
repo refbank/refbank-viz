@@ -147,12 +147,6 @@ head(harmonized_csv,10)
 
 ```
 
-
-
-
-
-
-
 ## Test out R shiny
 
 ```{r pressure, echo=FALSE}
