@@ -15,7 +15,7 @@ ui <- fluidPage(
         "rep", 
         "Select Repetition(s):", 
         choices = c("1" = 0, "2" = 1, "3" = 2, "4" = 3, "5" = 4, "6" = 5),
-        selected = 0  # Default selection
+        selected = 0
       ),
       selectInput(
         "game", 
@@ -32,7 +32,7 @@ ui <- fluidPage(
   )
 )
 
-# Define Server Logic
+# Define Server
 server <- function(input, output) {
   
   output$word_plot <- renderPlot({
@@ -41,30 +41,22 @@ server <- function(input, output) {
     rep_df <- chat_csv %>%
       group_by(gameId, repNum) %>%
       summarise(total_num_words = sum(total_num_words, na.rm = TRUE), .groups = "drop") %>%
-      filter(!is.na(total_num_words))
-    
-    filtered_data <- rep_df %>% filter(repNum %in% as.numeric(input$rep))
+      filter(!is.na(total_num_words)) %>%
+      filter(repNum %in% as.numeric(input$rep))
     
     if (input$game != "All Games") {
-      filtered_data <- filtered_data %>% filter(gameId == input$game)
+      rep_df <- rep_df %>% filter(gameId == input$game)
     }
     
-    if (nrow(filtered_data) == 0) return(NULL)
+    if (nrow(rep_df) == 0) return(NULL)
     
-    enough_points <- length(unique(filtered_data$repNum)) > 1
-    
-    p <- ggplot(filtered_data, aes(x = repNum, y = total_num_words, color = as.factor(gameId), group = gameId)) +
+    ggplot(rep_df, aes(x = repNum, y = total_num_words, color = as.factor(gameId), group = gameId)) +
       geom_line() +
       geom_point() +
       labs(title = "Total Number of Words Per Repetition", x = "Repetition Number", y = "Total Words") +
       theme_minimal() +
-      theme(legend.position = "none")
-    
-    if (enough_points) {
-      p <- p + geom_smooth(aes(group = 1), method = "lm", se = TRUE, color = "black", linetype = "dashed")
-    }
-    
-    p
+      theme(legend.position = "none") +
+      geom_smooth(aes(group = 1), method = "lm", se = TRUE, color = "black", linetype = "dashed")
   })
   
   output$accuracy_plot <- renderPlot({
@@ -82,26 +74,22 @@ server <- function(input, output) {
     
     accuracy_data <- full_join(correct_data, total_data, by = c("gameId", "repNum")) %>%
       replace_na(list(submitted_correct = 0, submitted_total = 0)) %>%
-      mutate(accuracy = ifelse(submitted_total > 0, submitted_correct / submitted_total, 0))
-    
-    avg_accuracy <- accuracy_data %>%
-      group_by(repNum) %>%
-      summarise(accuracy = mean(accuracy, na.rm = TRUE), .groups = "drop") %>%
+      mutate(accuracy = ifelse(submitted_total > 0, submitted_correct / submitted_total, 0)) %>%
       filter(repNum %in% as.numeric(input$rep))
     
     if (input$game != "All Games") {
-      avg_accuracy <- accuracy_data %>%
-        filter(gameId == input$game) %>%
-        group_by(repNum) %>%
-        summarise(accuracy = mean(accuracy, na.rm = TRUE), .groups = "drop")
+      accuracy_data <- accuracy_data %>% filter(gameId == input$game)
     }
     
-    if (nrow(avg_accuracy) == 0) return(NULL)
+    if (nrow(accuracy_data) == 0) return(NULL)
     
-    ggplot(avg_accuracy, aes(x = factor(repNum), y = accuracy, fill = factor(repNum))) +
-      geom_bar(stat = "identity") +
-      labs(title = "Average Accuracy by RepNum", x = "Repetition Number", y = "Average Accuracy", fill = "Rep Num") +
-      theme_minimal()
+    ggplot(accuracy_data, aes(x = repNum, y = accuracy, color = as.factor(gameId), group = gameId)) +
+      geom_line() +
+      geom_point() +
+      labs(title = "Accuracy Across Repetitions", x = "Repetition Number", y = "Accuracy") +
+      theme_minimal() +
+      theme(legend.position = "none") +
+      geom_smooth(aes(group = 1), method = "lm", se = TRUE, color = "black", linetype = "dashed")
   })
   
   output$time_plot <- renderPlot({
@@ -110,28 +98,25 @@ server <- function(input, output) {
     reaction_time <- chat_csv %>%
       filter(!is.na(time)) %>%
       group_by(gameId, repNum) %>%
-      summarise(avg_time = mean(time), .groups = "drop")
-    
-    filtered_time <- reaction_time %>%
+      summarise(avg_time = mean(time, na.rm = TRUE), .groups = "drop") %>%
       filter(repNum %in% as.numeric(input$rep))
     
     if (input$game != "All Games") {
-      filtered_time <- filtered_time %>% filter(gameId == input$game)
+      reaction_time <- reaction_time %>% filter(gameId == input$game)
     }
     
-    avg_time <- filtered_time %>%
-      group_by(repNum) %>%
-      summarise(time = mean(avg_time, na.rm = TRUE), .groups = "drop")
+    if (nrow(reaction_time) == 0) return(NULL)
     
-    if (nrow(avg_time) == 0) return(NULL)
-    
-    ggplot(avg_time, aes(x = factor(repNum), y = time, fill = factor(repNum))) +
-      geom_bar(stat = "identity") +
-      labs(title = "Average Time by RepNum", x = "Repetition Number", y = "Average Time", fill = "Rep Num") +
-      theme_minimal()
+    ggplot(reaction_time, aes(x = repNum, y = avg_time, color = as.factor(gameId), group = gameId)) +
+      geom_line() +
+      geom_point() +
+      labs(title = "Average Time per Repetition", x = "Repetition Number", y = "Average Time") +
+      theme_minimal() +
+      theme(legend.position = "none") +
+      geom_smooth(aes(group = 1), method = "lm", se = TRUE, color = "black", linetype = "dashed")
   })
 }
 
-# Run the App
+# Run App
 shinyApp(ui = ui, server = server)
 
