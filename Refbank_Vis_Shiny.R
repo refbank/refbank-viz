@@ -3,8 +3,9 @@ library(ggplot2)
 library(dplyr)
 library(tidyr)
 
+file_dir <- "C:\\Users\\zihan\\Downloads\\multiparty-tangrams-main\\data\\study1\\chat.csv"
 # Load Data
-chat_csv <- read.csv("C:\\Users\\zihan\\Downloads\\multiparty-tangrams-main\\data\\study1\\chat.csv")
+chat_csv <- read.csv(file_dir)
 
 # Define UI
 ui <- fluidPage(
