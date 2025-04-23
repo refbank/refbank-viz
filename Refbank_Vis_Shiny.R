@@ -78,7 +78,7 @@ server <- function(input, output) {
     
     rep_df <- all_data |>
       filter(paper_id %in% input$dataset) |> 
-      group_by(game_id, rep_num, group_size) |>
+      group_by(game_id, rep_num, group_size, structure) |>
       filter(role == "describer") |> 
       summarise(total_num_words = sum(length(str_split(message, " ")), na.rm = TRUE), .groups = "drop") |>
       filter(!is.na(total_num_words),
@@ -103,7 +103,7 @@ server <- function(input, output) {
     correct_data <- all_data |>
       filter(paper_id %in% input$dataset) |> 
       filter(!is.na(choice_id)) |> 
-      group_by(game_id, rep_num, group_size) |>
+      group_by(game_id, rep_num, group_size, structure) |>
       summarise(submitted_correct = sum(target_id == choice_id, na.rm = TRUE),
                 submitted_total = n(), .groups = "drop")
     
@@ -131,7 +131,7 @@ server <- function(input, output) {
     reaction_time <- all_data |>
       filter(paper_id %in% input$dataset) |> 
       filter(!is.na(time_to_choice)) |>
-      group_by(game_id, rep_num, group_size) |>
+      group_by(game_id, rep_num, group_size, structure) |>
       summarise(avg_time = mean(time_to_choice, na.rm = TRUE), .groups = "drop") |>
       filter(rep_num %in% as.numeric(input$rep))
     
