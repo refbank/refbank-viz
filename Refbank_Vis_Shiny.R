@@ -1,7 +1,7 @@
 library(shiny)
 library(tidyverse)
 library(here)
-theme_set(theme_classic())
+theme_set(theme_classic(base_size = 14))
 
 # Load Data
 chat_csv <- read.csv(here("chat.csv")) |> mutate(repNum = repNum + 1)
@@ -62,7 +62,7 @@ server <- function(input, output) {
     ggplot(rep_df, aes(x = repNum, y = total_num_words, color = as.factor(.data[[input$grouping]]), group = gameId)) +
       geom_line(alpha = if (input$game == "All games") 0.2 else 1) +
       geom_point(alpha = if (input$game == "All games") 0.2 else 1) +
-      labs(title = "Total speaker utterance length across repetitions", x = "Repetition number", y = "Length (words)",
+      labs(title = "Total speaker utterance length across repetitions", x = "Repetition", y = "Length (words)",
            col = names(groupings)[groupings == input$grouping]) +
       # theme_minimal() +
       theme(legend.position = if (input$grouping == "gameId") "none" else "inside",
