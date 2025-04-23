@@ -1,6 +1,7 @@
 library(shiny)
 library(tidyverse)
 library(here)
+theme_set(theme_classic())
 
 # Load Data
 chat_csv <- read.csv(here("chat.csv")) |> mutate(repNum = repNum + 1)
@@ -21,6 +22,12 @@ ui <- fluidPage(
         "Game ID:", 
         choices = c("All games", unique(chat_csv$gameId)),  
         selected = "All games"
+      ),
+      selectInput(
+        "grouping",
+        "Color by:",
+        choices = c("None" = "gameId", "Group size" = "numPlayers"),# "Tangram" = "tangram"),
+        selected = "None"
       )
     ),
     mainPanel(
@@ -34,30 +41,35 @@ ui <- fluidPage(
 # Define Server
 server <- function(input, output) {
   
+  groupings <- c("None" = "gameId", "Group size" = "numPlayers")
+  
   output$word_plot <- renderPlot({
     req(input$rep)
     
     rep_df <- chat_csv |>
-      group_by(gameId, repNum) |>
+      group_by(gameId, repNum, numPlayers) |>
       filter(role == "speaker") |> 
       summarise(total_num_words = sum(total_num_words, na.rm = TRUE), .groups = "drop") |>
       filter(!is.na(total_num_words),
              repNum %in% as.numeric(input$rep))
     
     if (input$game != "All games") {
-      rep_df <- rep_df |> filter(gameId == input$game)
+      rep_df <- rep_df |> filter(input$grouping == input$game)
     }
     
     if (nrow(rep_df) == 0) return(NULL)
     
-    ggplot(rep_df, aes(x = repNum, y = total_num_words, color = as.factor(gameId), group = gameId)) +
-      geom_line(alpha = .5) +
-      geom_point(alpha = .5) +
-      labs(title = "Total speaker utterance length across repetitions", x = "Repetition number", y = "Length (words)") +
-      theme_minimal() +
-      theme(legend.position = "none") +
-      geom_smooth(aes(group = 1), method = "lm", formula = y ~ log(x),
-                  se = TRUE, color = "black", linetype = "dashed")
+    ggplot(rep_df, aes(x = repNum, y = total_num_words, color = as.factor(.data[[input$grouping]]), group = gameId)) +
+      geom_line(alpha = if (input$game == "All games") 0.2 else 1) +
+      geom_point(alpha = if (input$game == "All games") 0.2 else 1) +
+      labs(title = "Total speaker utterance length across repetitions", x = "Repetition number", y = "Length (words)",
+           col = names(groupings)[groupings == input$grouping]) +
+      # theme_minimal() +
+      theme(legend.position = if (input$grouping == "gameId") "none" else "inside",
+            legend.position.inside = c(0.9, 0.85)) +
+      geom_smooth(aes(col = if (input$grouping == "gameId") "black" else as.factor(.data[[input$grouping]]),
+                      group = if (input$grouping == "gameId") 1 else as.factor(.data[[input$grouping]])), 
+                  method = "lm", formula = y ~ log(x), se = (input$grouping == "gameId"), linetype = "dashed")
   })
   
   output$accuracy_plot <- renderPlot({
@@ -65,33 +77,36 @@ server <- function(input, output) {
     
     correct_data <- chat_csv |>
       filter(!is.na(submitted) & !is.na(correct) & submitted == TRUE & correct == TRUE) |>
-      group_by(gameId, repNum) |>
+      group_by(gameId, repNum, numPlayers) |>
       summarise(submitted_correct = n(), .groups = "drop")
     
     total_data <- chat_csv |>
       filter(!is.na(submitted) & submitted == TRUE) |>
-      group_by(gameId, repNum) |>
+      group_by(gameId, repNum, numPlayers) |>
       summarise(submitted_total = n(), .groups = "drop")
     
-    accuracy_data <- full_join(correct_data, total_data, by = c("gameId", "repNum")) |>
+    accuracy_data <- full_join(correct_data, total_data, by = join_by(gameId, repNum, numPlayers)) |>
       replace_na(list(submitted_correct = 0, submitted_total = 0)) |>
       mutate(accuracy = ifelse(submitted_total > 0, submitted_correct / submitted_total, 0)) |>
       filter(repNum %in% as.numeric(input$rep))
     
     if (input$game != "All games") {
-      accuracy_data <- accuracy_data |> filter(gameId == input$game)
+      accuracy_data <- accuracy_data |> filter(input$grouping == input$game)
     }
     
     if (nrow(accuracy_data) == 0) return(NULL)
     
-    ggplot(accuracy_data, aes(x = repNum, y = accuracy, color = as.factor(gameId), group = gameId)) +
-      geom_line(alpha = .5) +
-      geom_point(alpha = .5) +
-      labs(title = "Accuracy across repetitions", x = "Repetition", y = "Accuracy") +
-      theme_minimal() +
-      theme(legend.position = "none") +
-      geom_smooth(aes(group = 1), method = "lm", formula = y ~ log(x),
-                  se = TRUE, color = "black", linetype = "dashed")
+    ggplot(accuracy_data, aes(x = repNum, y = accuracy, color = as.factor(.data[[input$grouping]]), group = gameId)) +
+      geom_line(alpha = if (input$game == "All games") 0.2 else 1) +
+      geom_point(alpha = if (input$game == "All games") 0.2 else 1) +
+      labs(title = "Accuracy across repetitions", x = "Repetition", y = "Accuracy",
+           col = names(groupings)[groupings == input$grouping]) +
+      # theme_minimal() +
+      theme(legend.position = if (input$grouping == "gameId") "none" else "inside",
+            legend.position.inside = c(0.9, 0.2)) +
+      geom_smooth(aes(col = if (input$grouping == "gameId") "black" else as.factor(.data[[input$grouping]]),
+                      group = if (input$grouping == "gameId") 1 else as.factor(.data[[input$grouping]])), 
+                  method = "lm", formula = y ~ log(x), se = (input$grouping == "gameId"), linetype = "dashed")
   })
   
   output$time_plot <- renderPlot({
@@ -99,24 +114,27 @@ server <- function(input, output) {
     
     reaction_time <- chat_csv |>
       filter(!is.na(time)) |>
-      group_by(gameId, repNum) |>
+      group_by(gameId, repNum, numPlayers) |>
       summarise(avg_time = mean(time, na.rm = TRUE), .groups = "drop") |>
       filter(repNum %in% as.numeric(input$rep))
     
     if (input$game != "All games") {
-      reaction_time <- reaction_time |> filter(gameId == input$game)
+      reaction_time <- reaction_time |> filter(input$grouping == input$game)
     }
     
     if (nrow(reaction_time) == 0) return(NULL)
     
-    ggplot(reaction_time, aes(x = repNum, y = avg_time, color = as.factor(gameId), group = gameId)) +
-      geom_line(alpha = .5) +
-      geom_point(alpha = .5) +
-      labs(title = "Response time per repetition", x = "Repetition", y = "Response time (s)") +
-      theme_minimal() +
-      theme(legend.position = "none") +
-      geom_smooth(aes(group = 1), method = "lm", formula = y ~ log(x),
-                  se = TRUE, color = "black", linetype = "dashed")
+    ggplot(reaction_time, aes(x = repNum, y = avg_time, color = as.factor(.data[[input$grouping]]), group = gameId)) +
+      geom_line(alpha = if (input$game == "All games") 0.2 else 1) +
+      geom_point(alpha = if (input$game == "All games") 0.2 else 1) +
+      labs(title = "Response time per repetition", x = "Repetition", y = "Response time (s)",
+           col = names(groupings)[groupings == input$grouping]) +
+      # theme_minimal() +
+      theme(legend.position = if (input$grouping == "gameId") "none" else "inside",
+            legend.position.inside = c(0.9, 0.85)) +
+      geom_smooth(aes(col = if (input$grouping == "gameId") "black" else as.factor(.data[[input$grouping]]),
+                      group = if (input$grouping == "gameId") 1 else as.factor(.data[[input$grouping]])), 
+                  method = "lm", formula = y ~ log(x), se = (input$grouping == "gameId"), linetype = "dashed")
   })
 }
 
