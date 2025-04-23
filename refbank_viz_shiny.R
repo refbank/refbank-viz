@@ -10,7 +10,8 @@ all_files <- list.files(DATA_LOC)
 all_data <- map(all_files, \(f) {
   read_csv(here(DATA_LOC, f), show_col_types = FALSE) # |>
     # mutate(dataset = str_remove(f, "\\.csv"))
-}) |> list_rbind()
+}) |> list_rbind() |> 
+  mutate(structure = factor(structure, levels = c("thin", "medium", "med_thick", "thick", "pairs-network")))
 
 groupings <- c("None" = "game_id", "Group size" = "group_size", "Structure" = "structure")
 
@@ -21,14 +22,15 @@ make_line_plot <- function(df, y, game, grouping, title, y_lab, legend_pos) {
              group = game_id)) +
     geom_line(alpha = if (game == "All games") 0.15 else 1) +
     geom_point(alpha = if (game == "All games") 0.15 else 1) +
-    labs(title = title, x = "Repetition", y = y_lab,
-         col = names(groupings)[groupings == grouping]) +
-    theme(legend.position = if (grouping == "game_id") "none" else "inside",
-          legend.position.inside = legend_pos) +
     geom_smooth(aes(col = if (grouping == "game_id") "black" else as.factor(.data[[grouping]]),
                     group = if (grouping == "game_id") 1 else as.factor(.data[[grouping]])), 
                 method = "lm", formula = y ~ log(x), 
-                se = (grouping == "game_id"), linetype = "dashed")
+                se = (grouping == "game_id"), linetype = "dashed") +
+    scale_x_continuous(breaks = if (max(df$rep_num) > 6) seq(0, 12, 2) else 1:6) + 
+    labs(title = title, x = "Repetition", y = y_lab,
+         col = names(groupings)[groupings == grouping]) +
+    theme(legend.position = if (grouping == "game_id") "none" else "inside",
+          legend.position.inside = legend_pos)
 }
 
 ###### UI / selectors ######
