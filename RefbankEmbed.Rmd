@@ -1,0 +1,124 @@
+```{r}
+library(dplyr)
+library(stringr)
+library(purrr)
+library(ggplot2)
+library(plotly)
+
+# Safe SBERT parser
+safe_parse_embedding <- function(x) {
+  if (!is.na(x) && is.character(x)) {
+    x <- gsub("array\\(|\\)", "", x)
+    x <- gsub("\n", " ", x)
+    nums <- str_extract_all(x, "-?\\d+\\.?\\d*")[[1]]
+    return(as.numeric(nums))
+  } else {
+    return(NA)
+  }
+}
+
+# Load and parse
+df_raw <- read.csv("C:\\Users\\zihan\\Downloads\\embeddings.csv", stringsAsFactors = FALSE)
+df_raw$embedding <- lapply(df_raw$embedding, safe_parse_embedding)
+df <- df_raw[!sapply(df_raw$embedding, function(x) any(is.na(x))), ]
+
+# Cosine similarity function
+cosine_sim <- function(a, b) {
+  sum(a * b) / (sqrt(sum(a^2)) * sqrt(sum(b^2)))
+}
+
+```
+
+
+
+```{r gamewise-cosine, message=FALSE, warning=FALSE}
+# Change to "rep_num" if testing by repetition
+time_col <- "trial_num"
+
+game_avg_sims <- list()
+
+for (game_id in unique(df$game_id)) {
+  game_df <- df %>% filter(game_id == game_id)
+  tangram_sims <- list()
+
+  for (target_id in unique(game_df$target_id)) {
+    tg_df <- game_df %>% filter(target_id == target_id) %>% arrange(!!sym(time_col))
+    if (nrow(tg_df) < 2) next
+
+    base_emb <- tg_df$embedding[[1]]
+    sims <- map_dbl(tg_df$embedding, ~ cosine_sim(base_emb, .x))
+
+    temp_df <- data.frame(
+      time = tg_df[[time_col]],
+      cosine_sim = sims
+    )
+
+    tangram_sims[[length(tangram_sims) + 1]] <- temp_df
+  }
+
+  if (length(tangram_sims) > 0) {
+    all_tg_df <- bind_rows(tangram_sims)
+    avg_sim <- all_tg_df %>%
+      group_by(time) %>%
+      summarise(cosine_sim = mean(cosine_sim, na.rm = TRUE)) %>%
+      arrange(time)
+
+    game_avg_sims[[as.character(game_id)]] <- avg_sim
+  }
+}
+
+# Combine and tag by game ID
+combined_df <- bind_rows(lapply(names(game_avg_sims), function(game_id) {
+  game_avg_sims[[game_id]]$game_id <- game_id
+  game_avg_sims[[game_id]]
+}))
+
+# Plot
+p1 <- ggplot(combined_df, aes(x = time, y = cosine_sim, color = game_id, group = game_id)) +
+  geom_line(alpha = 0.4) +
+  geom_point() +
+  geom_smooth(aes(group = 1), method = "lm", color = "black", linetype = "dashed") +
+  labs(title = paste("Cosine Similarity to First Message by", time_col),
+       x = time_col, y = "Mean Cosine Similarity") +
+  theme_minimal()
+
+ggplotly(p1)
+
+```
+
+```{r tangram-crossgame, message=FALSE, warning=FALSE}
+tangram_sims <- list()
+
+for (target_id in unique(df$target_id)) {
+  tg_df <- df %>% filter(target_id == target_id) %>% arrange(rep_num)
+  if (nrow(tg_df) < 2) next
+
+  base_emb <- tg_df$embedding[[1]]
+  sims <- map_dbl(tg_df$embedding, ~ cosine_sim(base_emb, .x))
+
+  temp_df <- data.frame(
+    rep_num = tg_df$rep_num,
+    cosine_sim = sims
+  ) %>% group_by(rep_num) %>%
+    summarise(cosine_sim = mean(cosine_sim, na.rm = TRUE))
+
+  tangram_sims[[as.character(target_id)]] <- temp_df
+}
+
+# Combine and tag by tangram ID
+combined_tg_df <- bind_rows(lapply(names(tangram_sims), function(tg_id) {
+  tangram_sims[[tg_id]]$target_id <- tg_id
+  tangram_sims[[tg_id]]
+}))
+
+# Plot
+p2 <- ggplot(combined_tg_df, aes(x = rep_num, y = cosine_sim, color = target_id, group = target_id)) +
+  geom_line() +
+  geom_point() +
+  labs(title = "Cross-Game Cosine Similarity by Tangram (Repetition)",
+       x = "Repetition Number", y = "Cosine Similarity to First Repetition") +
+  theme_minimal()
+
+ggplotly(p2)
+
+```
