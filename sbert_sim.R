@@ -21,8 +21,7 @@ all_trials <- map(all_dirs, \(d) get_trials_full(DATA_LOC, d)) |>
 
 embeds <- all_embeds |> left_join(all_trials) |> 
   select(game_id, target, stage_num, rep_num, condition_id, 
-         describer, paper_id, group_size, structure, language, option_size, starts_with("dim")) |> 
-  filter(paper_id %in% c("boyce2024_interaction", "hawkins2023_frompartners"))
+         describer, paper_id, group_size, structure, language, option_size, starts_with("dim"))
 
 ### helper funcs
 get_sim_matrix = function(df, F_mat, method = 'cosine') {
