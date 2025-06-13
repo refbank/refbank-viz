@@ -35,7 +35,7 @@ groupings <- c("None" = "game_id", "Group size" = "group_size",
                "Structure" = "structure", "Option set size" = "option_size")
 option_sizes <- sort(unique(all_trials$option_size))
 
-make_line_plot <- function(df, y, grouping, faceting, indiv_lines,
+make_line_plot <- function(df, y, grouping, faceting, indiv_lines, stage_one_only,
                            title, y_lab, legend_pos) {
   p <- ggplot(df, 
               aes(x = rep_num, y = .data[[y]], 
@@ -52,7 +52,7 @@ make_line_plot <- function(df, y, grouping, faceting, indiv_lines,
   
   if (grouping == "game_id") {
     p <- p +
-      geom_smooth(aes(group = 1), 
+      geom_smooth(aes(group = if (stage_one_only) 1 else stage_num), 
                   method = "lm", formula = y ~ log(x), 
                   se = TRUE, 
                   col = "black",
@@ -60,7 +60,8 @@ make_line_plot <- function(df, y, grouping, faceting, indiv_lines,
   } else {
     p <- p +
       geom_smooth(aes(col = as.factor(.data[[grouping]]),
-                      group = as.factor(.data[[grouping]])), 
+                      group = if (stage_one_only) as.factor(.data[[grouping]])
+                      else interaction(stage_num, as.factor(.data[[grouping]]))), 
                   method = "lm", formula = y ~ log(x), 
                   se = FALSE, 
                   lty = "dashed", linewidth = 1.5)
@@ -156,8 +157,9 @@ server <- function(input, output) {
     rep_df <- rep_df |>
       filter(paper_id %in% input$dataset,
              role == "describer",
-             !message_irrelevant) |> 
-      group_by(game_id, rep_num, group_size, structure, option_size, trial_num) |> 
+             is.na(message_irrelevant) | !message_irrelevant,
+             !is.na(text)) |> 
+      group_by(game_id, rep_num, group_size, structure, option_size, stage_num, trial_num) |> 
       summarise(total_num_words = sum(lengths(str_split(text, " ")), na.rm = TRUE), 
                 .groups = "drop_last") |>
       summarise(mean_num_words = mean(total_num_words, na.rm = TRUE), 
@@ -168,7 +170,7 @@ server <- function(input, output) {
     if (nrow(rep_df) == 0) return(NULL)
     
     make_line_plot(rep_df, "mean_num_words", 
-                   input$grouping, input$faceting, input$indiv_lines,
+                   input$grouping, input$faceting, input$indiv_lines, input$stage_one_only,
                    "Total speaker utterance length across repetitions", 
                    "Length (words)", c(0.85, 0.75))
     
@@ -186,7 +188,7 @@ server <- function(input, output) {
     correct_data <- correct_data |>
       filter(paper_id %in% input$dataset,
              !is.na(choice_id)) |> 
-      group_by(game_id, rep_num, group_size, structure, option_size) |>
+      group_by(game_id, rep_num, group_size, structure, option_size, stage_num) |>
       summarise(submitted_correct = sum(target == choice_id, na.rm = TRUE),
                 submitted_total = n(), .groups = "drop")
     
@@ -198,7 +200,7 @@ server <- function(input, output) {
     if (nrow(accuracy_data) == 0) return(NULL)
     
     make_line_plot(accuracy_data, "accuracy", 
-                   input$grouping, input$faceting, input$indiv_lines,
+                   input$grouping, input$faceting, input$indiv_lines, input$stage_one_only,
                    "Accuracy across repetitions", 
                    "Accuracy", c(0.85, 0.25))
     
@@ -217,14 +219,14 @@ server <- function(input, output) {
       filter(paper_id %in% input$dataset,
              !is.na(time_stamp),
              choice_id != "timed_out") |>
-      group_by(game_id, rep_num, group_size, structure, option_size) |>
+      group_by(game_id, rep_num, group_size, structure, option_size, stage_num) |>
       summarise(avg_time = mean(time_stamp, na.rm = TRUE), .groups = "drop") |>
       filter(input$rep[1] <= rep_num & rep_num <= input$rep[2])
     
     if (nrow(reaction_time) == 0) return(NULL)
     
     make_line_plot(reaction_time, "avg_time", 
-                   input$grouping, input$faceting, input$indiv_lines,
+                   input$grouping, input$faceting, input$indiv_lines, input$stage_one_only,
                    "Response time across repetitions", 
                    "Response time (s)", c(0.85, 0.8))
     
