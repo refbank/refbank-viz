@@ -5,7 +5,7 @@ library(stringi)
 
 source(here("data_helpers.R"))
 
-DATA_LOC=here("harmonized_data")
+DATA_LOC = here("../refbank-import/harmonized_data")
 all_dirs <- list.dirs(DATA_LOC, full.names = FALSE) |> 
   stri_remove_empty()
 
@@ -22,7 +22,7 @@ all_trials <- map(all_dirs, \(d) get_trials_full(DATA_LOC, d)) |>
 embeds <- all_embeds |> left_join(all_trials) |> 
   select(game_id, target, stage_num, rep_num, condition_id, 
          describer, paper_id, group_size, structure, language, option_size, starts_with("dim")) |> 
-  filter(paper_id %in% c("boyce2024_interaction"))
+  filter(paper_id %in% c("boyce2024_interaction", "hawkins2023_frompartners"))
 
 ### helper funcs
 get_sim_matrix = function(df, F_mat, method = 'cosine') {
@@ -45,7 +45,7 @@ flatten_sim_matrix <- function(cormat, ids) {
     dim1 = ids[row(cormat)[ut]],
     dim2 = ids[col(cormat)[ut]],
     sim  = as.numeric(cormat[ut])
-  ) %>%
+  ) |> 
     mutate(dim1 = as.character(dim1),
            dim2 = as.character(dim2))
 }
@@ -65,60 +65,59 @@ make_across_df <- function(M_mat, F_mat, method) {
 }
 
 ### funcs
-do_diverge <- function(concat){
-  F_mat <- concat %>% select(starts_with("dim")) %>% as.matrix() 
-  M_mat <- concat %>% select(-starts_with("dim")) %>% mutate(feature_ind=row_number())
+do_diverge <- function(concat) {
   
-  game_divergence <- M_mat %>%
-    group_by(rep_num, target, stage_num, paper_id, structure, group_size) |> 
-  #  group_by(target, stage_num, rep_num, condition_id, 
-   #       paper_id, group_size, structure, language, option_size) |> 
-    mutate(combinedId=game_id) %>%
-    make_across_df(F_mat, 'cosine') %>%
-    rename(game_id_1=dim1) |> 
-    rename(game_id_2=dim2) |> 
-    filter(game_id_1!=game_id_2) %>%
-    mutate(sim = ifelse(is.nan(sim), NA, sim)) %>%
+  F_mat <- concat |> select(starts_with("dim")) |> as.matrix() 
+  M_mat <- concat |> select(-starts_with("dim")) |> mutate(feature_ind = row_number())
+  
+  game_divergence <- M_mat |> 
+    group_by(target, stage_num, rep_num, condition_id,
+             paper_id, group_size, structure, language, option_size) |>
+    mutate(combinedId = game_id) |> 
+    make_across_df(F_mat, 'cosine') |> 
+    rename(game_id_1 = dim1) |> 
+    rename(game_id_2 = dim2) |> 
+    filter(game_id_1 != game_id_2) |> 
+    mutate(sim = ifelse(is.nan(sim), NA, sim)) |> 
     ungroup()
   
   return(game_divergence)
 }
 
-do_converge <- function(concat){
+do_converge <- function(concat) {
   
-  concat <- embeds |> head(1000)
-  F_mat <- concat %>% select(starts_with("dim")) %>% as.matrix() #Features
-  M_mat <- concat %>% select(-starts_with("dim")) %>% mutate(feature_ind=row_number())
+  F_mat <- concat |> select(starts_with("dim")) |> as.matrix() #Features
+  M_mat <- concat |> select(-starts_with("dim")) |> mutate(feature_ind = row_number())
   
-  tangram_change <- M_mat %>%
-    group_by(game_id, target, stage_num, rep_num, condition_id, 
-          paper_id, group_size, structure, language, option_size) |> 
-    mutate(combinedId=str_c(rep_num,describer,sep=";")) |> 
-    make_across_df(F_mat, 'cosine') 
-    separate(dim1, into=c("rep_num_1","describer_1"), convert=T, sep=";") %>%
-    separate(dim2, into=c("rep_num_2","describer_2"), convert=T, sep=";") %>%
-    mutate(sim = ifelse(is.nan(sim), NA, sim)) %>%
-    mutate(later=ifelse(rep_num_1>rep_num_2,rep_num_1, rep_num_2),
-           earlier=ifelse(repNum_1>rep_num_2,rep_num_2, rep_num_1),
-           same_describer=ifelse(describer_1==describer_2,1,0))
+  tangram_change <- M_mat |> 
+    group_by(game_id, target, stage_num, condition_id, 
+             paper_id, group_size, structure, language, option_size) |> 
+    mutate(combinedId = str_c(rep_num,describer,sep=";")) |> 
+    make_across_df(F_mat, 'cosine') |> 
+    separate(dim1, into = c("rep_num_1", "describer_1"), convert = TRUE, sep = ";") |> 
+    separate(dim2, into = c("rep_num_2", "describer_2"), convert = T, sep = ";") |> 
+    mutate(sim = ifelse(is.nan(sim), NA, sim)) |> 
+    mutate(later = ifelse(rep_num_1 > rep_num_2, rep_num_1, rep_num_2), 
+           earlier = ifelse(repNum_1 > rep_num_2, rep_num_2, rep_num_1), 
+           same_describer = ifelse(describer_1 == describer_2, 1, 0)
+    )
   
   return(tangram_change)
 }
 
-do_diff_tangrams <- function(concat){
+do_diff_tangrams <- function(concat) {
   
-  F_mat <- concat %>% select(starts_with("dim")) %>% as.matrix() #Features
-  M_mat <- concat %>% select(-starts_with("dim")) %>% mutate(feature_ind=row_number())
+  F_mat <- concat |> select(starts_with("dim")) |> as.matrix() #Features
+  M_mat <- concat |> select(-starts_with("dim")) |> mutate(feature_ind = row_number())
   
-  
-  tangram_distinctive <- M_mat %>%
+  tangram_distinctive <- M_mat |> 
     group_by(game_id, stage_num, rep_num, condition_id, 
-            paper_id, group_size, structure, language, option_size) |> 
-    mutate(combinedId=target) %>%
-    make_across_df(F_mat, 'cosine') %>%
-    rename(target_1=dim1,target_2=dim2) %>%
-    mutate(sim = ifelse(is.nan(sim), NA, sim)) %>%
-    filter(target_1!=target_2) %>%
+             paper_id, group_size, structure, language, option_size) |> 
+    mutate(combinedId = target) |>
+    make_across_df(F_mat, 'cosine') |>
+    rename(target_1 = dim1, target_2 = dim2) |>
+    mutate(sim = ifelse(is.nan(sim), NA, sim)) |>
+    filter(target_1 != target_2) |> 
     ungroup() 
   
   return(tangram_distinctive)
@@ -127,10 +126,20 @@ do_diff_tangrams <- function(concat){
 
 
 converge <- do_converge(embeds)
-to_next  <- converge |> filter(earlier+1==later) |> write_csv(here("sim_cache/to_next.csv"))
-to_last <- converge |> mutate(max_trial=max(later)) |> filter(later=max_trial) |> write_csv(here("sim_cache/to_last.csv"))
-to_first <- converge |> mutate(min_trial=min(later)) |> filter(earlier=min_trial) |>  write_csv(here("sim_cache/to_first.csv"))
+to_next  <- converge |> 
+  filter(earlier + 1 == later) |> 
+  write_csv(here("sim_cache/to_next.csv"))
+to_last <- converge |> 
+  mutate(max_trial = max(later)) |> 
+  filter(later = max_trial) |> 
+  write_csv(here("sim_cache/to_last.csv"))
+to_first <- converge |> 
+  mutate(min_trial = min(later)) |> 
+  filter(earlier = min_trial) |>  
+  write_csv(here("sim_cache/to_first.csv"))
 
-diverge <- do_diverge(data) |>  write_csv(here("sim_cache/diverge.csv"))
+diverge <- do_diverge(data) |>  
+  write_csv(here("sim_cache/diverge.csv"))
 
-tangram_distinct <- do_diff_tangrams(data) |>  write_csv(here("sim_cache/target_diff.csv"))
+tangram_distinct <- do_diff_tangrams(data) |> 
+  write_csv(here("sim_cache/target_diff.csv"))
