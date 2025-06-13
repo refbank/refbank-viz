@@ -98,7 +98,7 @@ do_converge <- function(concat) {
     separate(dim2, into = c("rep_num_2", "describer_2"), convert = T, sep = ";") |> 
     mutate(sim = ifelse(is.nan(sim), NA, sim)) |> 
     mutate(later = ifelse(rep_num_1 > rep_num_2, rep_num_1, rep_num_2), 
-           earlier = ifelse(repNum_1 > rep_num_2, rep_num_2, rep_num_1), 
+           earlier = ifelse(rep_num_1 > rep_num_2, rep_num_2, rep_num_1), 
            same_describer = ifelse(describer_1 == describer_2, 1, 0)
     )
   
@@ -123,19 +123,20 @@ do_diff_tangrams <- function(concat) {
   return(tangram_distinctive)
 }
 
-
-
+# run fxns
 converge <- do_converge(embeds)
 to_next  <- converge |> 
   filter(earlier + 1 == later) |> 
   write_csv(here("sim_cache/to_next.csv"))
 to_last <- converge |> 
+  group_by(paper_id, game_id, stage_num) |> 
   mutate(max_trial = max(later)) |> 
-  filter(later = max_trial) |> 
+  filter(later == max_trial) |> 
   write_csv(here("sim_cache/to_last.csv"))
 to_first <- converge |> 
+  group_by(paper_id, game_id, stage_num) |> 
   mutate(min_trial = min(later)) |> 
-  filter(earlier = min_trial) |>  
+  filter(earlier == min_trial) |>  
   write_csv(here("sim_cache/to_first.csv"))
 
 diverge <- do_diverge(data) |>  
