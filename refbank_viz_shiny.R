@@ -9,6 +9,7 @@ source(here("theme.R"))
 ###### Data loading ######
 ### NOTE: assumes that refbank-import is in the same dir as refbank-viz
 DATA_LOC = here("../refbank-import/harmonized_data")
+SIM_LOC = here("sim_cache")
 all_dirs <- list.dirs(DATA_LOC, full.names = FALSE) |> 
   stri_remove_empty()
 
@@ -30,6 +31,13 @@ all_trials <- map(all_dirs, \(d) get_trials_full(DATA_LOC, d)) |>
            str_split(";") |> 
            lengths()) |> 
   filter(option_size != 1)
+
+all_tonext <- map(all_dirs, \(d) get_sim(SIM_LOC, d, "to_next")) |> 
+  list_rbind()
+all_diverge <- map(all_dirs, \(d) get_sim(SIM_LOC, d, "diverge")) |> 
+  list_rbind()
+all_targetdiff <- map(all_dirs, \(d) get_sim(SIM_LOC, d, "target_diff")) |> 
+  list_rbind()
 
 groupings <- c("None" = "game_id", "Group size" = "group_size", 
                "Structure" = "structure", "Option set size" = "option_size")
@@ -135,9 +143,22 @@ ui <- fluidPage(
       )
     ),
     mainPanel(
-      plotOutput("word_plot"),
-      plotOutput("accuracy_plot"),
-      plotOutput("time_plot")
+      tabsetPanel(
+        tabPanel(
+          title = "Canonical analyses",
+          style = "padding: 15px 0px",
+          plotOutput("word_plot"),
+          plotOutput("accuracy_plot"),
+          plotOutput("time_plot"),
+        ),
+        tabPanel(
+          title = "Embedding analyses",
+          style = "padding: 15px 0px",
+          plotOutput("toprev_plot"),
+          plotOutput("diverge_plot"),
+          plotOutput("tardiff_plot")
+        )
+      )
     )
   )
 )
@@ -230,6 +251,78 @@ server <- function(input, output) {
                    "Response time across repetitions", 
                    "Response time (s)", c(0.85, 0.8))
     
+  })
+  
+  output$toprev_plot <- renderPlot({
+    req(input$rep)
+    
+    toprev_data <- all_tonext
+    if (input$stage_one_only) {
+      toprev_data <- toprev_data |> 
+        filter(stage_num == 1)
+    }
+    
+    toprev_data <- toprev_data |>
+      filter(paper_id %in% input$dataset,
+             !is.na(sim)) |>
+      mutate(rep_num = later) |> 
+      group_by(game_id, rep_num, group_size, structure, option_size, stage_num) |>
+      summarise(sim = mean(sim, na.rm = TRUE), .groups = "drop")
+    
+    if (nrow(toprev_data) == 0) return(NULL)
+    
+    make_line_plot(toprev_data, "sim", 
+                   input$grouping, input$faceting, input$indiv_lines, input$stage_one_only,
+                   "Similarity to previous round utterance within game", 
+                   "Cosine similarity", c(0.85, 0.25))
+  })
+  
+  output$diverge_plot <- renderPlot({
+    req(input$rep)
+    
+    diverge_data <- all_diverge
+    if (input$stage_one_only) {
+      diverge_data <- diverge_data |> 
+        filter(stage_num == 1)
+    }
+    
+    diverge_data <- diverge_data |>
+      filter(paper_id %in% input$dataset,
+             !is.na(sim)) |> 
+      mutate(game_id = paste(game_id_1, game_id_2, sep = "_")) |> 
+      group_by(game_id, rep_num, group_size, structure, option_size, stage_num) |>
+      summarise(sim = mean(sim, na.rm = TRUE), .groups = "drop")
+    
+    if (nrow(diverge_data) == 0) return(NULL)
+    
+    make_line_plot(diverge_data, "sim", 
+                   input$grouping, input$faceting, input$indiv_lines, input$stage_one_only,
+                   "Similarity to other games within rounds", 
+                   "Cosine similarity", c(0.85, 0.25))
+  })
+  
+  output$tardiff_plot <- renderPlot({
+    req(input$rep)
+    
+    tardiff_data <- all_targetdiff
+    if (input$stage_one_only) {
+      tardiff_data <- tardiff_data |> 
+        filter(stage_num == 1)
+    }
+    
+    tardiff_data <- tardiff_data |>
+      filter(paper_id %in% input$dataset,
+             !is.na(sim)) |> 
+      mutate(target = paste(target_1, target_2, sep = "_")) |> 
+      group_by(game_id, rep_num, group_size, structure, option_size, stage_num, target) |>
+      summarise(sim = mean(sim, na.rm = TRUE), .groups = "drop")
+    
+    if (nrow(tardiff_data) == 0) return(NULL)
+    
+    make_line_plot(tardiff_data, "sim", 
+                   input$grouping, input$faceting, input$indiv_lines, input$stage_one_only,
+                   "Similarity to other same-round targets within game", 
+                   "Cosine similarity", c(0.85, 0.25))
   })
 }
 

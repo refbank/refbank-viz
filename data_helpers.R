@@ -1,6 +1,7 @@
 DATA_LOC = here("../refbank-import/harmonized_data")
+SIM_LOC = here("sim_cache")
 
-get_tbl <- function(con = DATA_LOC, dataset_name, tbl_name) {
+get_tbl <- function(con = DATA_LOC, dataset_name, tbl_name, is_sim = FALSE) {
   # con is fake rn, and takes in the root dir for all datasets
   if (missing(dataset_name)) {
     stop("dataset_name must be provided")
@@ -16,7 +17,7 @@ get_tbl <- function(con = DATA_LOC, dataset_name, tbl_name) {
   
   out <- read_csv(file_path, show_col_types = FALSE)
   
-  if (tbl_name == "conditions") {
+  if (tbl_name == "conditions" | is_sim) {
     out <- out |> 
       mutate(structure = structure |> 
                as.character() |> 
@@ -60,4 +61,8 @@ get_choices_full <- function(con = DATA_LOC, dataset_name) {
   out <- trials |> 
     left_join(choices, by = join_by(trial_id, option_set))
   out
+}
+
+get_sim <- function(con = SIM_CACHE, dataset_name, tbl_name) {
+  get_tbl(con, dataset_name, tbl_name, is_sim = TRUE)
 }
