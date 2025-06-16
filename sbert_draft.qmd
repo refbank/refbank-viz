@@ -27,16 +27,9 @@ all_embeds <- map(all_dirs, \(d) get_tbl(DATA_LOC, d, "embeddings")) |>
 ```
 
 ```{r}
-all_embeds_fix <- all_embeds |> 
-  mutate(embeddings = map(embeddings, \(e) {
-    e |> 
-      str_split("[\\[\\](\\n) ]") |> 
-      map(\(x) x[x != ""] |> as.numeric())
-  }))
-
-embed_mat <- all_embeds_fix$embeddings |> 
-  unlist(use.names = FALSE) |> 
-  matrix(ncol = 384, byrow = TRUE)
+embed_mat <- all_embeds |> 
+  select(starts_with("dim_")) |> 
+  matrix()
 
 embed_tsne <- embed_mat |> 
   Rtsne(verbose = TRUE, check_duplicates = FALSE) |> 

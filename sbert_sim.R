@@ -125,8 +125,8 @@ do_diff_tangrams <- function(concat) {
   check_size <- concat |>  group_by(
     game_id, stage_num, rep_num, condition_id,
     paper_id, group_size, structure, language, option_size
-  ) |>tally() |> 
-    filter(n>1) |> select(-n) |> ungroup()
+  ) |> tally() |> 
+    filter(n > 1) |> select(-n) |> ungroup()
   
   useable <- concat |> inner_join(check_size)
   F_mat <- useable |>
@@ -151,6 +151,35 @@ do_diff_tangrams <- function(concat) {
   return(tangram_distinctive)
 }
 
+do_idiosyncrasy <- function(concat) {
+  check_size <- concat |>  group_by(
+    game_id, target, stage_num, rep_num, condition_id,
+    paper_id, group_size, structure, language, option_size
+  ) |> tally() |> 
+    filter(n > 1) |> select(-n) |> ungroup()
+  
+  useable <- concat |> inner_join(check_size)
+  F_mat <- useable |>
+    select(starts_with("dim")) |>
+    as.matrix() # Features
+  M_mat <- useable |>
+    select(-starts_with("dim")) |>
+    mutate(feature_ind = row_number())
+
+  idiosyncrasy <- M_mat |>
+    group_by(
+      game_id, target, stage_num, rep_num, condition_id,
+      paper_id, group_size, structure, language, option_size
+    ) |>
+    mutate(combinedId = class) |>
+    make_across_df(F_mat, "cosine") |>
+    mutate(sim = ifelse(is.nan(sim), NA, sim)) |>
+    select(-dim1, -dim2) |> 
+    ungroup()
+
+  return(idiosyncrasy)
+}
+
 # run fxns
 
 DATA_LOC <- here("harmonized_data")
@@ -159,10 +188,10 @@ DATA_LOC <- here("harmonized_data")
 do_dataset_sims <- function(dataset) {
   
   message(dataset)
-    trials <- get_trials_full(DATA_LOC, dataset) |>
+  trials <- get_trials_full(DATA_LOC, dataset) |>
     mutate(option_size = option_set |>
-      str_split(";") |>
-      lengths()) |>
+             str_split(";") |>
+             lengths()) |>
     filter(option_size != 1)
   embeds <- get_tbl(DATA_LOC, dataset, "embeddings") |>
     left_join(trials) |>
@@ -171,32 +200,48 @@ do_dataset_sims <- function(dataset) {
       describer, paper_id, group_size, structure, language, option_size, starts_with("dim")
     )
 
-  dir.create(file.path(here("sim_cache"), dataset), showWarnings = FALSE)
-
-  message("start converge")
-  converge <- do_converge(embeds)
-  message("end converge")
-  to_next <- converge |>
-    filter(earlier + 1 == later) |>
-    write_csv(here("sim_cache", dataset, "to_next.csv"))
-  to_last <- converge |>
-    group_by(paper_id, game_id, stage_num) |>
-    mutate(max_trial = max(later)) |>
-    filter(later == max_trial) |>
-    write_csv(here("sim_cache", dataset, "to_last.csv"))
-  to_first <- converge |>
-    group_by(paper_id, game_id, stage_num) |>
-    mutate(min_trial = min(later)) |>
-    filter(earlier == min_trial) |>
-    write_csv(here("sim_cache", dataset, "to_first.csv"))
-
-  message("start diverge")
-  diverge <- do_diverge(embeds) |>
-    write_csv(here("sim_cache", dataset, "diverge.csv"))
-
-  message("start tangram diff")
-  tangram_distinct <- do_diff_tangrams(embeds) |>
-    write_csv(here("sim_cache", dataset, "target_diff.csv"))
+  # dir.create(file.path(here("sim_cache"), dataset), showWarnings = FALSE)
+  # 
+  # message("start converge")
+  # converge <- do_converge(embeds)
+  # message("end converge")
+  # to_next <- converge |>
+  #   filter(earlier + 1 == later) |>
+  #   write_csv(here("sim_cache", dataset, "to_next.csv"))
+  # to_last <- converge |>
+  #   group_by(paper_id, game_id, stage_num) |>
+  #   mutate(max_trial = max(later)) |>
+  #   filter(later == max_trial) |>
+  #   write_csv(here("sim_cache", dataset, "to_last.csv"))
+  # to_first <- converge |>
+  #   group_by(paper_id, game_id, stage_num) |>
+  #   mutate(min_trial = min(later)) |>
+  #   filter(earlier == min_trial) |>
+  #   write_csv(here("sim_cache", dataset, "to_first.csv"))
+  # 
+  # message("start diverge")
+  # diverge <- do_diverge(embeds) |>
+  #   write_csv(here("sim_cache", dataset, "diverge.csv"))
+  # 
+  # message("start tangram diff")
+  # tangram_distinct <- do_diff_tangrams(embeds) |>
+  #   write_csv(here("sim_cache", dataset, "target_diff.csv"))
+  
+  message("start idiosyncrasy")
+  prior <- embeds |> 
+    filter(rep_num == 1) |> 
+    group_by(target) |> 
+    summarise(across(starts_with("dim"), \(d) mean(d, na.rm = TRUE))) |> 
+    mutate(class = "prior")
+  idiosyncrasy <- embeds |> 
+    mutate(class = "embed") |> 
+    bind_rows(
+      embeds |> 
+        select(-starts_with("dim")) |> 
+        left_join(prior, by = join_by(target))
+    ) |> 
+    do_idiosyncrasy() |>
+    write_csv(here("sim_cache", dataset, "idiosyncrasy.csv"))
 }
 
 

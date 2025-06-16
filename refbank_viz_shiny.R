@@ -38,6 +38,8 @@ all_diverge <- map(all_dirs, \(d) get_sim(SIM_LOC, d, "diverge")) |>
   list_rbind()
 all_targetdiff <- map(all_dirs, \(d) get_sim(SIM_LOC, d, "target_diff")) |> 
   list_rbind()
+all_idiosyncrasy <- map(all_dirs, \(d) get_sim(SIM_LOC, d, "idiosyncrasy")) |> 
+  list_rbind()
 
 groupings <- c("None" = "game_id", "Group size" = "group_size", 
                "Structure" = "structure", "Option set size" = "option_size")
@@ -76,7 +78,7 @@ make_line_plot <- function(df, y, grouping, faceting, indiv_lines, stage_one_onl
   }
   
   p <- p +
-    scale_x_continuous(breaks = if (max(df$rep_num) > 6) seq(0, 12, 2) else 1:6) + 
+    scale_x_continuous(breaks = if (max(df$rep_num, na.rm = TRUE) > 6) seq(0, 12, 2) else 1:6) + 
     labs(title = title, x = "Repetition", y = y_lab,
          col = names(groupings)[groupings == grouping])
   
@@ -156,7 +158,8 @@ ui <- fluidPage(
           style = "padding: 15px 0px",
           plotOutput("toprev_plot"),
           plotOutput("diverge_plot"),
-          plotOutput("tardiff_plot")
+          plotOutput("tardiff_plot"),
+          plotOutput("idio_plot")
         )
       )
     )
@@ -192,8 +195,9 @@ server <- function(input, output) {
     
     make_line_plot(rep_df, "mean_num_words", 
                    input$grouping, input$faceting, input$indiv_lines, input$stage_one_only,
-                   "Total speaker utterance length across repetitions", 
-                   "Length (words)", c(0.85, 0.75))
+                   "Reduction: Total speaker utterance length across repetitions", 
+                   "Length (words)", c(0.85, 0.75)) +
+      coord_cartesian(ylim = c(0, 50))
     
   })
   
@@ -273,7 +277,7 @@ server <- function(input, output) {
     
     make_line_plot(toprev_data, "sim", 
                    input$grouping, input$faceting, input$indiv_lines, input$stage_one_only,
-                   "Similarity to previous round utterance within game", 
+                   "Convergence: Similarity to previous round utterance within game", 
                    "Cosine similarity", c(0.85, 0.25))
   })
   
@@ -288,16 +292,18 @@ server <- function(input, output) {
     
     diverge_data <- diverge_data |>
       filter(paper_id %in% input$dataset,
-             !is.na(sim)) |> 
-      mutate(game_id = paste(game_id_1, game_id_2, sep = "_")) |> 
-      group_by(game_id, rep_num, group_size, structure, option_size, stage_num) |>
-      summarise(sim = mean(sim, na.rm = TRUE), .groups = "drop")
+             !is.na(sim),
+             !is.na(target)) |> 
+      # mutate(game_id = paste(game_id_1, game_id_2, sep = "_")) |> 
+      group_by(condition_id, rep_num, group_size, structure, option_size, stage_num, target) |>
+      summarise(sim = mean(sim, na.rm = TRUE), .groups = "drop") |> 
+      mutate(game_id = paste(condition_id, target, sep = "_"))
     
     if (nrow(diverge_data) == 0) return(NULL)
     
     make_line_plot(diverge_data, "sim", 
                    input$grouping, input$faceting, input$indiv_lines, input$stage_one_only,
-                   "Similarity to other games within rounds", 
+                   "Divergence: Similarity to other games within rounds", 
                    "Cosine similarity", c(0.85, 0.25))
   })
   
@@ -314,14 +320,38 @@ server <- function(input, output) {
       filter(paper_id %in% input$dataset,
              !is.na(sim)) |> 
       mutate(target = paste(target_1, target_2, sep = "_")) |> 
-      group_by(game_id, rep_num, group_size, structure, option_size, stage_num, target) |>
+      group_by(game_id, rep_num, group_size, structure, option_size, stage_num) |>
       summarise(sim = mean(sim, na.rm = TRUE), .groups = "drop")
     
     if (nrow(tardiff_data) == 0) return(NULL)
     
     make_line_plot(tardiff_data, "sim", 
                    input$grouping, input$faceting, input$indiv_lines, input$stage_one_only,
-                   "Similarity to other same-round targets within game", 
+                   "Differentiation: Similarity to other same-round targets within game", 
+                   "Cosine similarity", c(0.85, 0.25))
+  })
+  
+  output$idio_plot <- renderPlot({
+    req(input$rep)
+    
+    idio_data <- all_idiosyncrasy
+    if (input$stage_one_only) {
+      idio_data <- idio_data |> 
+        filter(stage_num == 1)
+    }
+    
+    idio_data <- idio_data |>
+      filter(paper_id %in% input$dataset,
+             !is.na(sim),
+             !is.na(structure)) |> 
+      group_by(game_id, rep_num, group_size, structure, option_size, stage_num) |>
+      summarise(sim = mean(sim, na.rm = TRUE), .groups = "drop")
+    
+    if (nrow(idio_data) == 0) return(NULL)
+    
+    make_line_plot(idio_data, "sim", 
+                   input$grouping, input$faceting, input$indiv_lines, input$stage_one_only,
+                   "Idiosyncrasy: Similarity to mean of round 1 utterances", 
                    "Cosine similarity", c(0.85, 0.25))
   })
 }
