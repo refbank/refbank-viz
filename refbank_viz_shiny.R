@@ -2,47 +2,39 @@ library(shiny)
 library(tidyverse)
 library(stringi)
 library(here)
+library(refbankr)
 
 source(here("data_helpers.R"))
 source(here("theme.R"))
 
 ###### Data loading ######
 ### NOTE: assumes that refbank-import is in the same dir as refbank-viz
-DATA_LOC = here("../refbank-import/harmonized_data")
+
+# redivis version
+
+#TODO consider optimizing by doing our own joins, idk what is faster
+all_datasets <- get_datasets()
+all_messages <- get_messages(include_trial_data=T, include_condition_data=T) 
+all_choices <- get_choices(include_trial_data = T, include_condition_data = T) 
+all_trials <- get_trials(include_condition_data = T) 
+
+# haven't done sbert stuff in redivis yet
 SIM_LOC = here("sim_cache")
-all_dirs <- list.dirs(DATA_LOC, full.names = FALSE) |> 
+all_dirs <- list.dirs(SIM_LOC, full.names = FALSE) |> 
   stri_remove_empty()
 
-all_messages <- map(all_dirs, \(d) get_messages_full(DATA_LOC, d)) |> 
-  list_rbind() |> 
-  mutate(option_size = option_set |> 
-           str_split(";") |> 
-           lengths()) |> 
-  filter(option_size != 1)
-all_choices <- map(all_dirs, \(d) get_choices_full(DATA_LOC, d)) |>
-  list_rbind() |> 
-  mutate(option_size = option_set |> 
-           str_split(";") |> 
-           lengths()) |> 
-  filter(option_size != 1)
-all_trials <- map(all_dirs, \(d) get_trials_full(DATA_LOC, d)) |>
-  list_rbind() |> 
-  mutate(option_size = option_set |> 
-           str_split(";") |> 
-           lengths()) |> 
-  filter(option_size != 1)
-
 all_tonext <- map(all_dirs, \(d) get_sim(SIM_LOC, d, "to_next")) |> 
-  list_rbind()
+  list_rbind()|> rename(dataset_id=paper_id)
 all_diverge <- map(all_dirs, \(d) get_sim(SIM_LOC, d, "diverge")) |> 
-  list_rbind()
+  list_rbind()|> rename(dataset_id=paper_id)
 all_targetdiff <- map(all_dirs, \(d) get_sim(SIM_LOC, d, "target_diff")) |> 
-  list_rbind()
+  list_rbind()|> rename(dataset_id=paper_id)
 all_idiosyncrasy <- map(all_dirs, \(d) get_sim(SIM_LOC, d, "idiosyncrasy")) |> 
-  list_rbind()
+  list_rbind() |> rename(dataset_id=paper_id)
 
 groupings <- c("None" = "game_id", "Group size" = "group_size", 
                "Structure" = "structure", "Option set size" = "option_size")
+
 option_sizes <- sort(unique(all_trials$option_size))
 
 make_line_plot <- function(df, y, grouping, faceting, indiv_lines, stage_one_only,
@@ -117,8 +109,8 @@ ui <- fluidPage(
       selectInput(
         "dataset",
         "Dataset:",
-        choices = unique(all_trials$paper_id),
-        selected = setdiff(unique(all_trials$paper_id), "yoon2019_audience"),
+        choices = unique(all_trials$dataset_id),
+        selected = setdiff(unique(all_trials$dataset_id), "yoon2019_audience"),
         multiple = TRUE
       ),
       selectInput(
@@ -179,7 +171,7 @@ server <- function(input, output) {
     }
     
     rep_df <- rep_df |>
-      filter(paper_id %in% input$dataset,
+      filter(dataset_id %in% input$dataset,
              role == "describer",
              is.na(message_irrelevant) | !message_irrelevant,
              !is.na(text)) |> 
@@ -211,7 +203,7 @@ server <- function(input, output) {
     }
     
     correct_data <- correct_data |>
-      filter(paper_id %in% input$dataset,
+      filter(dataset_id %in% input$dataset,
              !is.na(choice_id)) |> 
       group_by(game_id, rep_num, group_size, structure, option_size, stage_num) |>
       summarise(submitted_correct = sum(target == choice_id, na.rm = TRUE),
@@ -241,7 +233,7 @@ server <- function(input, output) {
     }
     
     reaction_time <- reaction_time |>
-      filter(paper_id %in% input$dataset,
+      filter(dataset_id %in% input$dataset,
              !is.na(time_stamp),
              choice_id != "timed_out") |>
       group_by(game_id, rep_num, group_size, structure, option_size, stage_num) |>
@@ -267,7 +259,7 @@ server <- function(input, output) {
     }
     
     toprev_data <- toprev_data |>
-      filter(paper_id %in% input$dataset,
+      filter(dataset_id %in% input$dataset,
              !is.na(sim)) |>
       mutate(rep_num = later) |> 
       group_by(game_id, rep_num, group_size, structure, option_size, stage_num) |>
@@ -291,7 +283,7 @@ server <- function(input, output) {
     }
     
     diverge_data <- diverge_data |>
-      filter(paper_id %in% input$dataset,
+      filter(dataset_id %in% input$dataset,
              !is.na(sim),
              !is.na(target)) |> 
       # mutate(game_id = paste(game_id_1, game_id_2, sep = "_")) |> 
@@ -317,7 +309,7 @@ server <- function(input, output) {
     }
     
     tardiff_data <- tardiff_data |>
-      filter(paper_id %in% input$dataset,
+      filter(dataset_id %in% input$dataset,
              !is.na(sim)) |> 
       mutate(target = paste(target_1, target_2, sep = "_")) |> 
       group_by(game_id, rep_num, group_size, structure, option_size, stage_num) |>
@@ -341,7 +333,7 @@ server <- function(input, output) {
     }
     
     idio_data <- idio_data |>
-      filter(paper_id %in% input$dataset,
+      filter(dataset_id %in% input$dataset,
              !is.na(sim),
              !is.na(structure)) |> 
       group_by(game_id, rep_num, group_size, structure, option_size, stage_num) |>
