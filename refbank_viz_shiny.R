@@ -4,33 +4,37 @@ library(stringi)
 library(here)
 library(refbankr)
 
-source(here("data_helpers.R"))
+#source(here("data_helpers.R"))
 source(here("theme.R"))
+source(here("get_data.R"))
 
 ###### Data loading ######
-### NOTE: assumes that refbank-import is in the same dir as refbank-viz
+source="cached" # "cached" or "redivis"
 
-# redivis version
-
-#TODO consider optimizing by doing our own joins, idk what is faster
+if (source=="redivis"){
 all_datasets <- get_datasets()
 all_messages <- get_messages(include_trial_data=T, include_condition_data=T) 
 all_choices <- get_choices(include_trial_data = T, include_condition_data = T) 
 all_trials <- get_trials(include_condition_data = T) 
+all_tonext <- get_cosine_similarities(sim_type="to_next")
+all_diverge <- get_cosine_similarities(sim_type="diverge") 
+all_targetdiff <- get_cosine_similarities(sim_type="diff")
+all_idiosyncrasy <- get_cosine_similarities(sim_type="idiosyncrasy")
+}
 
-# haven't done sbert stuff in redivis yet
-SIM_LOC = here("sim_cache")
-all_dirs <- list.dirs(SIM_LOC, full.names = FALSE) |> 
-  stri_remove_empty()
+if (source=="cached"){
+  file_loc <- "cached_data"
+    check_cache(file_loc)
+    all_datasets <- read_csv(here(file_loc, "datasets.csv"))
+    all_messages <- read_csv(here(file_loc, "messages.csv"))
+    all_choices <- read_csv(here(file_loc, "choices.csv"))
+    all_trials <- read_csv(here(file_loc, "trials.csv"))
+    all_tonext <- read_csv(here(file_loc, "to_next.csv"))
+    all_diverge <- read_csv(here(file_loc, "diverge.csv"))
+    all_targetdiff <- read_csv(here(file_loc, "diff.csv"))
+    all_idiosyncrasy <- read_csv(here(file_loc, "idiosyncrasy.csv"))
+}
 
-all_tonext <- map(all_dirs, \(d) get_sim(SIM_LOC, d, "to_next")) |> 
-  list_rbind()|> rename(dataset_id=paper_id)
-all_diverge <- map(all_dirs, \(d) get_sim(SIM_LOC, d, "diverge")) |> 
-  list_rbind()|> rename(dataset_id=paper_id)
-all_targetdiff <- map(all_dirs, \(d) get_sim(SIM_LOC, d, "target_diff")) |> 
-  list_rbind()|> rename(dataset_id=paper_id)
-all_idiosyncrasy <- map(all_dirs, \(d) get_sim(SIM_LOC, d, "idiosyncrasy")) |> 
-  list_rbind() |> rename(dataset_id=paper_id)
 
 groupings <- c("None" = "game_id", "Group size" = "group_size", 
                "Structure" = "structure", "Option set size" = "option_size")
