@@ -1,5 +1,6 @@
 library(here)
 library(refbankr)
+library(redivis)
 #get current dataset version from redivis
 #If local version file == dataset version (don’t do anything)
 #else (blank local version file, download & save (maybe?) – time how long this takes?, write local version file)
@@ -34,18 +35,8 @@ if(cached_version==current_version){
 if(cached_version!=current_version){
   message("Updating cache.")
   writeLines("", here(file_loc, "version.txt")) 
-  get_datasets() |> write_csv(here(file_loc, "datasets.csv"))
-  get_trials(include_condition_data = T)  |>
-    write_csv(here(file_loc, "trials.csv"))
-  get_messages(include_trial_data=T, include_condition_data=T) |>
-    write_csv(here(file_loc, "messages.csv"))
-  get_choices(include_trial_data = T, include_condition_data = T) |>
-    write_csv(here(file_loc, "choices.csv"))
-  #TODO add more when we need more
-  get_cosine_similarities(sim_type="to_next") |> write_csv(here(file_loc, "to_next.csv"))
-  get_cosine_similarities(sim_type="diverge") |> write_csv(here(file_loc, "diverge.csv"))
-  get_cosine_similarities(sim_type="diff") |> write_csv(here(file_loc, "diff.csv"))
-  get_cosine_similarities(sim_type="idiosyncrasy") |> write_csv(here(file_loc, "idiosyncrasy.csv"))
+  con <- redivis$user("mcfrank")$dataset("refbank:2zy7")
+  con$table("per_game_summary:bsw0")$to_tibble() |> write_csv(here(file_loc, "per_game_summary.csv"))
   writeLines(current_version, here(file_loc, "version.txt")) 
   message("Cache updated.")
 }
