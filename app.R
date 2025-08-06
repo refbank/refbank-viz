@@ -7,30 +7,32 @@ library(redivis)
 source(here("theme.R"))
 source(here("get_data.R"))
 
-###### Data loading ######
+source <- "cached"
 
-###### Data loading ######
-source="cached" # "cached" or "redivis"
-
-if (source=="redivis"){
+if (source == "redivis") {
   con <- redivis$user("mcfrank")$dataset("refbank:2zy7")
   df <- con$table("per_game_summary:bsw0")$to_tibble()
 }
 
-if (source=="cached"){
+if (source == "cached") {
   file_loc <- "cached_data"
   check_cache(file_loc)
   df <- read_csv(here(file_loc, "per_game_summary.csv"))
 }
 
-####
+
+
+option_sizes <- sort(unique(df$option_size))
 
 groupings <- c(
-  "None" = "dataset_id", "Group size" = "group_size",
+  "Dataset" = "dataset_id", "Group size" = "group_size",
   "Structure" = "structure", "Option set size" = "option_size"
 )
 
-option_sizes <- sort(unique(df$option_size))
+facetings <- c(
+  "None" = "dataset_id", "Group size" = "group_size",
+  "Structure" = "structure", "Option set size" = "option_size"
+)
 
 make_line_plot <- function(df, y, grouping, faceting, indiv_lines, stage_one_only,
                            title, y_lab, legend_pos) {
@@ -44,7 +46,7 @@ make_line_plot <- function(df, y, grouping, faceting, indiv_lines, stage_one_onl
 
   if (indiv_lines) {
     p <- p +
-      geom_line(aes(group=game_id),alpha = 0.05)
+      geom_line(aes(group = game_id), alpha = 0.05)
   }
 
   p <- p +
@@ -68,7 +70,7 @@ make_line_plot <- function(df, y, grouping, faceting, indiv_lines, stage_one_onl
           } else {
             interaction(stage_num, as.factor(.data[[grouping]]))
           },
-          weight=trials,
+          weight = trials,
         ),
         method = "lm", formula = y ~ log(x),
         se = FALSE,
@@ -117,12 +119,26 @@ ui <- fluidPage(
         min = 1, max = 13,
         value = c(1, 6)
       ),
-      selectInput(
-        "dataset",
-        "Dataset:",
-        choices = unique(df$dataset_id),
-        selected = setdiff(unique(df$dataset_id), "yoon2019_audience"),
-        multiple = TRUE
+      checkboxGroupInput(
+        "group_size",
+        "Group size",
+        inline = T,
+        choices = sort(unique(df$group_size)),
+        selected = unique(df$group_size),
+      ),
+      checkboxGroupInput(
+        "structure",
+        "Structure",
+        inline = T,
+        choices = c("thin", "medium", "med_thick", "thick", "network-swap", "naive-swap"),
+        selected = c("thin", "medium", "med_thick", "thick", "network-swap", "naive-swap"),
+      ),
+      checkboxGroupInput(
+        "option_size",
+        "Option set size",
+        inline = T,
+        choices = sort(unique(df$option_size)),
+        selected = unique(df$option_size),
       ),
       selectInput(
         "grouping",
@@ -133,7 +149,7 @@ ui <- fluidPage(
       selectInput(
         "faceting",
         "Facet by:",
-        choices = groupings,
+        choices = facetings,
         selected = "None"
       ),
       checkboxInput(
@@ -145,7 +161,14 @@ ui <- fluidPage(
         "stage_one_only",
         "Only include first stage data",
         value = TRUE
-      )
+      ),
+      selectInput(
+        "dataset",
+        "Dataset:",
+        choices = unique(df$dataset_id),
+        selected = setdiff(unique(df$dataset_id), c("yoon2019_audience")),
+        multiple = TRUE
+      ),
     ),
     mainPanel(
       tabsetPanel(
@@ -170,7 +193,28 @@ ui <- fluidPage(
 )
 
 ###### Server & plots ######
-server <- function(input, output) {
+server <- function(input, output, session) {
+  source <- "cached"
+
+  if (source == "redivis") {
+    con <- redivis$user("mcfrank")$dataset("refbank:2zy7")
+    df <- con$table("per_game_summary:bsw0")$to_tibble()
+  }
+
+  if (source == "cached") {
+    file_loc <- "cached_data"
+    check_cache(file_loc)
+    df <- read_csv(here(file_loc, "per_game_summary.csv"))
+  }
+
+  option_sizes <- sort(unique(df$option_size))
+
+  observe({
+    updateSelectInput(session, "dataset", choices = unique(df$dataset_id), selected = setdiff(unique(df$dataset_id), c("yoon2019_audience")))
+    updateCheckboxGroupInput(session, "group_size", inline = T, choices = sort(unique(df$group_size)), selected = unique(df$group_size))
+    updateCheckboxGroupInput(session, "option_size", inline = T, choices = sort(unique(df$option_size)), selected = unique(df$option_size))
+  })
+
   output$word_plot <- renderPlot({
     req(input$rep)
 
