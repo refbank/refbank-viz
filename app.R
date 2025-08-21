@@ -26,12 +26,14 @@ option_sizes <- sort(unique(df$option_size))
 
 groupings <- c(
   "Dataset" = "dataset_id", "Group size" = "group_size",
-  "Structure" = "structure", "Option set size" = "option_size"
+  "Information availability" = "information_availability_composite", "Option set size" = "option_size",
+  "Modality" = "modality", "Backchannel" = "backchannel", "Feedback" = "feedback", "Role constancy" = "role_constancy"
 )
 
 facetings <- c(
   "None" = "dataset_id", "Group size" = "group_size",
-  "Structure" = "structure", "Option set size" = "option_size"
+  "Information availability" = "information_availability_composite", "Option set size" = "option_size",
+  "Modality" = "modality", "Backchannel" = "backchannel", "Feedback" = "feedback", "Role constancy" = "role_constancy"
 )
 
 make_line_plot <- function(df, y, grouping, faceting, indiv_lines, stage_one_only,
@@ -87,7 +89,7 @@ make_line_plot <- function(df, y, grouping, faceting, indiv_lines, stage_one_onl
 
   if (grouping == "group_size") {
     p <- p + GRP_SIZE_COL_SCALE
-  } else if (grouping == "structure") {
+  } else if (grouping == "information_availability_composite") {
     p <- p + STRUCT_COL_SCALE
   } else if (grouping == "option_size") {
     p <- p + OPT_SIZE_COL_SCALE
@@ -127,18 +129,46 @@ ui <- fluidPage(
         selected = unique(df$group_size),
       ),
       checkboxGroupInput(
-        "structure",
-        "Structure",
-        inline = T,
-        choices = c("thin", "medium", "med_thick", "thick", "network-swap", "naive-swap"),
-        selected = c("thin", "medium", "med_thick", "thick", "network-swap", "naive-swap"),
-      ),
-      checkboxGroupInput(
         "option_size",
         "Option set size",
         inline = T,
         choices = sort(unique(df$option_size)),
         selected = unique(df$option_size),
+      ),
+      checkboxGroupInput(
+        "population",
+        "Age groups",
+        inline = T,
+        choices = sort(unique(df$population)),
+        selected = unique(df$population),
+      ),
+      checkboxGroupInput(
+        "modality",
+        "Modality",
+        inline = T,
+        choices = sort(unique(df$modality)),
+        selected = unique(df$modality),
+      ),
+      checkboxGroupInput(
+        "feedback",
+        "Feedback on selection accuracy",
+        inline = T,
+        choices = c("none", "limited", "full"),
+        selected = c("none", "limited", "full"),
+      ),
+      checkboxGroupInput(
+        "backchannel",
+        "Matcher backchannel",
+        inline = T,
+        choices = c("none", "limited", "full"),
+        selected = c("none", "limited", "full"),
+      ),
+      checkboxGroupInput(
+        "partner_constancy",
+        "Partner constancy",
+        inline = T,
+        choices = c("Swaps" = "no", "No swaps" = "yes"),
+        selected = c("no", "yes"),
       ),
       selectInput(
         "grouping",
@@ -207,12 +237,15 @@ server <- function(input, output, session) {
     df <- read_csv(here(file_loc, "per_game_summary.csv"))
   }
 
+  df <- df |> filter(confederates == "no")
   option_sizes <- sort(unique(df$option_size))
 
   observe({
     updateSelectInput(session, "dataset", choices = unique(df$dataset_id), selected = setdiff(unique(df$dataset_id), c("yoon2019_audience")))
     updateCheckboxGroupInput(session, "group_size", inline = T, choices = sort(unique(df$group_size)), selected = unique(df$group_size))
     updateCheckboxGroupInput(session, "option_size", inline = T, choices = sort(unique(df$option_size)), selected = unique(df$option_size))
+    updateCheckboxGroupInput(session, "population", inline = T, choices = sort(unique(df$population)), selected = unique(df$population))
+    updateCheckboxGroupInput(session, "modality", inline = T, choices = sort(unique(df$modality)), selected = unique(df$modality))
   })
 
   output$word_plot <- renderPlot({
