@@ -56,7 +56,7 @@ make_line_plot <- function(df, y, grouping, faceting, indiv_lines, stage_one_onl
 
   if (grouping == "dataset_id") {
     p <- p +
-      geom_smooth(aes(group = if (stage_one_only) 1 else stage_num),
+      geom_smooth(aes(group = if (stage_one_only) 1 else stage_num, weight = trials),
         method = "lm", formula = y ~ log(x),
         se = TRUE,
         col = "black",
