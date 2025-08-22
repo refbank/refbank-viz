@@ -259,6 +259,13 @@ server <- function(input, output, session) {
     df <- df |>
       filter(dataset_id %in% input$dataset) |>
       filter(input$rep[1] <= rep_num & rep_num <= input$rep[2]) |>
+      filter(group_size %in% input$group_size) |>
+      filter(option_size %in% input$option_size) |>
+      filter(population %in% input$population) |>
+      filter(modality %in% input$modality) |>
+      filter(feedback %in% input$feedback) |>
+      filter(backchannel %in% input$backchannel) |>
+      filter(partner_constancy %in% input$partner_constancy) |>
       filter(!is.na(words))
 
     if (nrow(df) == 0) {
@@ -285,6 +292,13 @@ server <- function(input, output, session) {
     df <- df |>
       filter(dataset_id %in% input$dataset) |>
       filter(input$rep[1] <= rep_num & rep_num <= input$rep[2]) |>
+      filter(group_size %in% input$group_size) |>
+      filter(option_size %in% input$option_size) |>
+      filter(population %in% input$population) |>
+      filter(modality %in% input$modality) |>
+      filter(feedback %in% input$feedback) |>
+      filter(backchannel %in% input$backchannel) |>
+      filter(partner_constancy %in% input$partner_constancy) |>
       filter(!is.na(accuracy))
 
     if (nrow(df) == 0) {
@@ -310,6 +324,13 @@ server <- function(input, output, session) {
     df <- df |>
       filter(dataset_id %in% input$dataset) |>
       filter(input$rep[1] <= rep_num & rep_num <= input$rep[2]) |>
+      filter(group_size %in% input$group_size) |>
+      filter(option_size %in% input$option_size) |>
+      filter(population %in% input$population) |>
+      filter(modality %in% input$modality) |>
+      filter(feedback %in% input$feedback) |>
+      filter(backchannel %in% input$backchannel) |>
+      filter(partner_constancy %in% input$partner_constancy) |>
       filter(!is.na(rt))
 
     if (nrow(df) == 0) {
@@ -335,6 +356,13 @@ server <- function(input, output, session) {
     df <- df |>
       filter(dataset_id %in% input$dataset) |>
       filter(input$rep[1] <= rep_num & rep_num <= input$rep[2]) |>
+      filter(group_size %in% input$group_size) |>
+      filter(option_size %in% input$option_size) |>
+      filter(population %in% input$population) |>
+      filter(modality %in% input$modality) |>
+      filter(feedback %in% input$feedback) |>
+      filter(backchannel %in% input$backchannel) |>
+      filter(partner_constancy %in% input$partner_constancy) |>
       filter(!is.na(to_next))
 
     if (nrow(df) == 0) {
@@ -360,6 +388,13 @@ server <- function(input, output, session) {
     df <- df |>
       filter(dataset_id %in% input$dataset) |>
       filter(input$rep[1] <= rep_num & rep_num <= input$rep[2]) |>
+      filter(group_size %in% input$group_size) |>
+      filter(option_size %in% input$option_size) |>
+      filter(population %in% input$population) |>
+      filter(modality %in% input$modality) |>
+      filter(feedback %in% input$feedback) |>
+      filter(backchannel %in% input$backchannel) |>
+      filter(partner_constancy %in% input$partner_constancy) |>
       filter(!is.na(diverge))
 
     if (nrow(df) == 0) {
@@ -385,6 +420,13 @@ server <- function(input, output, session) {
     df <- df |>
       filter(dataset_id %in% input$dataset) |>
       filter(input$rep[1] <= rep_num & rep_num <= input$rep[2]) |>
+      filter(group_size %in% input$group_size) |>
+      filter(option_size %in% input$option_size) |>
+      filter(population %in% input$population) |>
+      filter(modality %in% input$modality) |>
+      filter(feedback %in% input$feedback) |>
+      filter(backchannel %in% input$backchannel) |>
+      filter(partner_constancy %in% input$partner_constancy) |>
       filter(!is.na(diff))
 
     if (nrow(df) == 0) {
@@ -411,6 +453,13 @@ server <- function(input, output, session) {
     df <- df |>
       filter(dataset_id %in% input$dataset) |>
       filter(input$rep[1] <= rep_num & rep_num <= input$rep[2]) |>
+      filter(group_size %in% input$group_size) |>
+      filter(option_size %in% input$option_size) |>
+      filter(population %in% input$population) |>
+      filter(modality %in% input$modality) |>
+      filter(feedback %in% input$feedback) |>
+      filter(backchannel %in% input$backchannel) |>
+      filter(partner_constancy %in% input$partner_constancy) |>
       filter(!is.na(idiosyncrasy))
 
     if (nrow(df) == 0) {
