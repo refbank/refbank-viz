@@ -341,7 +341,7 @@ server <- function(input, output, session) {
       df, "rt",
       input$grouping, input$faceting, input$indiv_lines, input$stage_one_only,
       "Response time across repetitions",
-      "Response time (s)", c(0.85, 0.8)
+      "Response time (s)", c(0.85, 0.75)
     )
   })
 
@@ -405,7 +405,7 @@ server <- function(input, output, session) {
       df, "diverge",
       input$grouping, input$faceting, input$indiv_lines, input$stage_one_only,
       "Divergence: Similarity to other games within rounds",
-      "Cosine similarity", c(0.85, 0.25)
+      "Cosine similarity", c(0.85, 0.75)
     )
   })
 
@@ -438,7 +438,7 @@ server <- function(input, output, session) {
       df, "diff",
       input$grouping, input$faceting, input$indiv_lines, input$stage_one_only,
       "Differentiation: Similarity to other same-round targets within game",
-      "Cosine similarity", c(0.85, 0.25)
+      "Cosine similarity", c(0.85, 0.75)
     )
   })
 
@@ -470,7 +470,7 @@ server <- function(input, output, session) {
       df, "idiosyncrasy",
       input$grouping, input$faceting, input$indiv_lines, input$stage_one_only,
       "Idiosyncrasy: Similarity to mean of round 1 utterances",
-      "Cosine similarity", c(0.85, 0.25)
+      "Cosine similarity", c(0.85, 0.75)
     )
   })
 }
