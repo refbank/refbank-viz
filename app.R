@@ -18,6 +18,9 @@ if (source == "cached") {
   file_loc <- "cached_data"
   check_cache(file_loc)
   df <- read_csv(here(file_loc, "per_game_summary.csv"))
+
+  pos_df <- read_csv(here(file_loc, "per_game_pos_summary.csv"))
+  df <- df |> left_join(pos_df, by = c("game_id", "rep_num", "stage_num"))
 }
 
 
@@ -210,6 +213,11 @@ ui <- fluidPage(
           plotOutput("time_plot"),
         ),
         tabPanel(
+          title = "PoS analyses",
+          style = "padding: 15px 0px",
+          plotOutput("hedge_plot")
+        ),
+        tabPanel(
           title = "Embedding analyses",
           style = "padding: 15px 0px",
           plotOutput("toprev_plot"),
@@ -225,7 +233,7 @@ ui <- fluidPage(
 ###### Server & plots ######
 server <- function(input, output, session) {
   source <- "cached"
-
+  
   if (source == "redivis") {
     con <- redivis$user("mcfrank")$dataset("refbank:2zy7")
     df <- con$table("per_game_summary:bsw0")$to_tibble()
@@ -235,6 +243,13 @@ server <- function(input, output, session) {
     file_loc <- "cached_data"
     check_cache(file_loc)
     df <- read_csv(here(file_loc, "per_game_summary.csv"))
+
+    pos_df <- read_csv(here(file_loc, "per_game_pos_summary.csv"))
+    if (file.exists(pos_path)) {
+      pos_df <- read_csv(pos_path)
+      df <- df |> left_join(pos_df, by = c("game_id", "rep_num", "stage_num"))
+    }
+
   }
 
   df <- df |> filter(confederates == "no")
@@ -472,6 +487,38 @@ server <- function(input, output, session) {
       "Idiosyncrasy: Similarity to mean of round 1 utterances",
       "Cosine similarity", c(0.85, 0.75)
     )
+  })
+  output$hedge_plot <- renderPlot({
+    req(input$rep)
+
+    if (input$stage_one_only) {
+      df <- df |>
+        filter(stage_num == 1)
+    }
+
+    df2 <- df |>
+      filter(dataset_id %in% input$dataset) |>
+      filter(input$rep[1] <= rep_num & rep_num <= input$rep[2]) |>
+      filter(group_size %in% input$group_size) |>
+      filter(option_size %in% input$option_size) |>
+      filter(population %in% input$population) |>
+      filter(modality %in% input$modality) |>
+      filter(feedback %in% input$feedback) |>
+      filter(backchannel %in% input$backchannel) |>
+      filter(partner_constancy %in% input$partner_constancy) |>
+      filter(!is.na(hedge_rate))
+
+    if (nrow(df2) == 0) {
+      return(NULL)
+    }
+
+    make_line_plot(
+      df2, "hedge_rate",
+      input$grouping, input$faceting, input$indiv_lines, input$stage_one_only,
+      "Hedge rate across repetitions",
+      "Hedges per word", c(0.85, 0.75)
+    ) +
+      coord_cartesian(ylim = c(0, 0.15))
   })
 }
 
