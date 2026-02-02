@@ -19,10 +19,14 @@ if (source == "cached") {
   check_cache(file_loc)
   df <- read_csv(here(file_loc, "per_game_summary.csv"))
 
-  pos_df <- read_csv(here(file_loc, "per_game_pos_summary.csv"))
-  df <- df |> left_join(pos_df, by = c("game_id", "rep_num", "stage_num"))
+  pos_path <- here(file_loc, "per_game_pos_summary.csv")
+  if (file.exists(pos_path)) {
+    pos_df <- read_csv(pos_path)
+    df <- df |> left_join(pos_df, by = c("game_id", "rep_num", "stage_num"))
+  } else {
+    message("PoS cache not found (per_game_pos_summary.csv). Skipping PoS join.")
+  }
 }
-
 
 
 option_sizes <- sort(unique(df$option_size))
@@ -244,7 +248,7 @@ server <- function(input, output, session) {
     check_cache(file_loc)
     df <- read_csv(here(file_loc, "per_game_summary.csv"))
 
-    pos_df <- read_csv(here(file_loc, "per_game_pos_summary.csv"))
+    pos_path <- here(file_loc, "per_game_pos_summary.csv")
     if (file.exists(pos_path)) {
       pos_df <- read_csv(pos_path)
       df <- df |> left_join(pos_df, by = c("game_id", "rep_num", "stage_num"))
@@ -490,6 +494,10 @@ server <- function(input, output, session) {
   })
   output$hedge_plot <- renderPlot({
     req(input$rep)
+
+    if (!"hedge_rate" %in% names(df)) {
+      return(NULL)
+    }
 
     if (input$stage_one_only) {
       df <- df |>
