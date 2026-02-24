@@ -51,7 +51,7 @@ make_line_plot <- function(df, y, grouping, faceting, indiv_lines, stage_one_onl
 
   if (indiv_lines) {
     p <- p +
-      geom_line(aes(group = game_id), alpha = 0.05)
+      geom_line(aes(group = if (stage_one_only) game_id else interaction(game_id, stage_num)), alpha = 0.05)
   }
 
   p <- p +
@@ -121,8 +121,13 @@ ui <- fluidPage(
       sliderInput(
         "rep",
         "Repetition(s):",
-        min = 1, max = 13,
+        min = min(df$rep_num), max = max(df$rep_num),
         value = c(1, 6)
+      ),
+      checkboxInput(
+        "stage_one_only",
+        "Only include first stage data",
+        value = TRUE
       ),
       checkboxGroupInput(
         "group_size",
@@ -188,11 +193,6 @@ ui <- fluidPage(
       checkboxInput(
         "indiv_lines",
         "Show lines per game",
-        value = TRUE
-      ),
-      checkboxInput(
-        "stage_one_only",
-        "Only include first stage data",
         value = TRUE
       ),
       selectInput(
@@ -261,6 +261,22 @@ server <- function(input, output, session) {
     updateCheckboxGroupInput(session, "option_size", inline = T, choices = sort(unique(df$option_size)), selected = unique(df$option_size))
     updateCheckboxGroupInput(session, "population", inline = T, choices = sort(unique(df$population)), selected = unique(df$population))
     updateCheckboxGroupInput(session, "modality", inline = T, choices = sort(unique(df$modality)), selected = unique(df$modality))
+  })
+
+  observeEvent(input$first_stage_only, {
+    rounds <- if (input$first_stage_only) first_stage_rounds else all_rounds
+
+    # Keep current value if it's still valid, otherwise reset
+    current <- isolate(input$repetition)
+    new_val <- if (current %in% rounds) current else min(rounds)
+
+    updateSliderInput(
+      session,
+      "repetition",
+      min   = min(rounds),
+      max   = max(rounds),
+      value = new_val
+    )
   })
 
   output$word_plot <- renderPlot({
