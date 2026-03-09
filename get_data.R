@@ -10,7 +10,7 @@ compute_hedge_pos_summary <- function(messages_df, trials_df) {
   library(dplyr)
   library(stringr)
 
-  # ---------- HEDGES ----------
+  # HEDGES
   hedge_phrases <- c(
     "i think", "i guess", "sort of", "kind of", "a little", "not sure",
     "looks like", "i feel like", "i suppose"
@@ -20,13 +20,13 @@ compute_hedge_pos_summary <- function(messages_df, trials_df) {
     "somewhat", "might", "could", "likely", "appears"
   )
 
-  # ---------- NEGATION ----------
+  # NEGATION 
   neg_pattern <- "\\b(not|never|no|none|nothing|nowhere|neither|nor|cannot)\\b|n't\\b"
 
-  # ---------- QUESTIONS ----------
+  # QUESTIONS 
   wh_pattern_start <- "^\\s*(what|where|who|when|why|how|which|whose)\\b"
 
-  # ---------- PREPOSITIONS ----------
+  # PREPOSITIONS 
   prep_words <- c(
     "about","above","across","after","against","along","among","around","at",
     "before","behind","below","beneath","beside","between","beyond","but","by",
@@ -157,6 +157,18 @@ compute_udpipe_pos_rates <- function(messages_df, trials_df, model_path) {
         function_tokens > 0,
         content_tokens / function_tokens,
         NA_real_
+      ),
+      pos_entropy = -(
+        ifelse(noun_rate  > 0, noun_rate  * log(noun_rate),  0) +
+        ifelse(verb_rate  > 0, verb_rate  * log(verb_rate),  0) +
+        ifelse(adj_rate   > 0, adj_rate   * log(adj_rate),   0) +
+        ifelse(adv_rate   > 0, adv_rate   * log(adv_rate),   0) +
+        ifelse(pron_rate  > 0, pron_rate  * log(pron_rate),  0) +
+        ifelse(adp_rate   > 0, adp_rate   * log(adp_rate),   0) +
+        ifelse(det_rate   > 0, det_rate   * log(det_rate),   0) +
+        ifelse(aux_rate   > 0, aux_rate   * log(aux_rate),   0) +
+        ifelse(cconj_rate > 0, cconj_rate * log(cconj_rate), 0) +
+        ifelse(sconj_rate > 0, sconj_rate * log(sconj_rate), 0)
       )
     ) |>
     select(
@@ -164,7 +176,8 @@ compute_udpipe_pos_rates <- function(messages_df, trials_df, model_path) {
       noun_rate, verb_rate, adj_rate, adv_rate,
       pron_rate, adp_rate, det_rate, aux_rate,
       cconj_rate, sconj_rate,
-      content_rate, function_rate, content_function_ratio
+      content_rate, function_rate, content_function_ratio,
+      pos_entropy
     ) |>
     rename(trial_id = doc_id) |>
     mutate(trial_id = as.numeric(trial_id))
@@ -189,6 +202,7 @@ compute_udpipe_pos_rates <- function(messages_df, trials_df, model_path) {
       content_rate = weighted.mean(content_rate, w = total_tokens, na.rm = TRUE),
       function_rate = weighted.mean(function_rate, w = total_tokens, na.rm = TRUE),
       content_function_ratio = weighted.mean(content_function_ratio, w = total_tokens, na.rm = TRUE),
+      pos_entropy = weighted.mean(pos_entropy, w = total_tokens, na.rm = TRUE),
 
       .groups = "drop"
     )

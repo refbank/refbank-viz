@@ -223,6 +223,13 @@ ui <- fluidPage(
           plotOutput("prep_plot"),
           plotOutput("pos_stack_plot", height = 350),
           plotOutput("content_ratio_plot"),
+          plotOutput("content_ratio_line_plot"),
+          plotOutput("modifier_plot"),
+          plotOutput("function_breakdown_plot", height = 350),
+          plotOutput("noun_pronoun_plot"),
+          plotOutput("entropy_plot"),
+          plotOutput("determiner_plot"),
+          plotOutput("modifier_noun_plot"),
           plotOutput("negation_plot"),
           plotOutput("question_plot")
         ),
@@ -680,9 +687,10 @@ output$prep_plot <- renderPlot({
 
     ggplot(df_long, aes(x = rep_num, y = rate, fill = pos)) +
       geom_area(position = "fill", alpha = 0.9) +
+      scale_fill_brewer(palette = "RdBu") +
       scale_x_continuous(breaks = if (max(df_long$rep_num, na.rm = TRUE) > 6) seq(0, 12, 2) else 1:6) +
       labs(
-        title = "POS composition across repetitions (udpipe)",
+        title = "POS composition across repetitions",
         x = "Repetition",
         y = "Share of tokens (stacked)",
         fill = "POS"
@@ -733,6 +741,7 @@ output$prep_plot <- renderPlot({
 
     ggplot(df_long, aes(x = rep_num, y = rate, fill = type)) +
       geom_area(position = "fill", alpha = 0.9) +
+      scale_fill_brewer(palette = "RdBu")+
       scale_x_continuous(
         breaks = if (max(df_long$rep_num, na.rm = TRUE) > 6)
           seq(0, 12, 2) else 1:6
@@ -746,7 +755,329 @@ output$prep_plot <- renderPlot({
       theme_minimal() +
       theme(legend.position = "bottom")
   })
+  output$content_ratio_line_plot <- renderPlot({
+    req(input$rep)
 
+    if (!"content_function_ratio" %in% names(df)) {
+      return(NULL)
+    }
+
+    df0 <- df
+
+    if (input$stage_one_only) {
+      df0 <- df0 |>
+        filter(stage_num == 1)
+    }
+
+    df2 <- df0 |>
+      filter(dataset_id %in% input$dataset) |>
+      filter(input$rep[1] <= rep_num & rep_num <= input$rep[2]) |>
+      filter(group_size %in% input$group_size) |>
+      filter(option_size %in% input$option_size) |>
+      filter(population %in% input$population) |>
+      filter(modality %in% input$modality) |>
+      filter(feedback %in% input$feedback) |>
+      filter(backchannel %in% input$backchannel) |>
+      filter(partner_constancy %in% input$partner_constancy) |>
+      filter(!is.na(content_function_ratio))
+
+    if (nrow(df2) == 0) {
+      return(NULL)
+    }
+
+    make_line_plot(
+      df2, "content_function_ratio",
+      input$grouping, input$faceting, input$indiv_lines, input$stage_one_only,
+      "Content-to-function ratio across repetitions",
+      "Content / function", c(0.85, 0.75)
+    )
+  })
+
+  output$function_breakdown_plot <- renderPlot({
+    req(input$rep)
+
+    func_cols <- c("pron_rate", "det_rate", "adp_rate", "aux_rate", "cconj_rate", "sconj_rate")
+    if (!all(func_cols %in% names(df))) {
+      return(NULL)
+    }
+
+    df0 <- df
+
+    if (input$stage_one_only) {
+      df0 <- df0 |>
+        filter(stage_num == 1)
+    }
+
+    df2 <- df0 |>
+      filter(dataset_id %in% input$dataset) |>
+      filter(input$rep[1] <= rep_num & rep_num <= input$rep[2]) |>
+      filter(group_size %in% input$group_size) |>
+      filter(option_size %in% input$option_size) |>
+      filter(population %in% input$population) |>
+      filter(modality %in% input$modality) |>
+      filter(feedback %in% input$feedback) |>
+      filter(backchannel %in% input$backchannel) |>
+      filter(partner_constancy %in% input$partner_constancy)
+
+    if (nrow(df2) == 0) {
+      return(NULL)
+    }
+
+    df_long <- df2 |>
+      select(rep_num, trials, all_of(func_cols)) |>
+      tidyr::pivot_longer(
+        cols = all_of(func_cols),
+        names_to = "pos",
+        values_to = "rate"
+      ) |>
+      filter(!is.na(rate)) |>
+      group_by(rep_num, pos) |>
+      summarise(
+        rate = weighted.mean(rate, w = trials, na.rm = TRUE),
+        .groups = "drop"
+      )
+
+    ggplot(df_long, aes(x = rep_num, y = rate, fill = pos)) +
+      geom_area(position = "fill", alpha = 0.9) +
+      scale_fill_brewer(palette = "RdBu") +
+      scale_x_continuous(
+        breaks = if (max(df_long$rep_num, na.rm = TRUE) > 6) seq(0, 12, 2) else 1:6
+      ) +
+      labs(
+        title = "Function-word composition across repetitions",
+        x = "Repetition",
+        y = "Share of function-word categories",
+        fill = "POS"
+      ) +
+      theme_minimal() +
+      theme(legend.position = "bottom")
+  })
+  output$noun_pronoun_plot <- renderPlot({
+    req(input$rep)
+
+    if (!all(c("noun_rate", "pron_rate") %in% names(df))) {
+      return(NULL)
+    }
+
+    df0 <- df
+
+    if (input$stage_one_only) {
+      df0 <- df0 |>
+        filter(stage_num == 1)
+    }
+
+    df2 <- df0 |>
+      filter(dataset_id %in% input$dataset) |>
+      filter(input$rep[1] <= rep_num & rep_num <= input$rep[2]) |>
+      filter(group_size %in% input$group_size) |>
+      filter(option_size %in% input$option_size) |>
+      filter(population %in% input$population) |>
+      filter(modality %in% input$modality) |>
+      filter(feedback %in% input$feedback) |>
+      filter(backchannel %in% input$backchannel) |>
+      filter(partner_constancy %in% input$partner_constancy)
+
+    if (nrow(df2) == 0) {
+      return(NULL)
+    }
+
+    df_long <- df2 |>
+      select(rep_num, trials, noun_rate, pron_rate) |>
+      tidyr::pivot_longer(
+        cols = c(noun_rate, pron_rate),
+        names_to = "type",
+        values_to = "rate"
+      ) |>
+      filter(!is.na(rate))
+
+    ggplot(df_long, aes(x = rep_num, y = rate, color = type)) +
+      geom_point(alpha = 0.05) +
+      geom_smooth(
+        aes(group = type, weight = trials),
+        method = "lm", formula = y ~ log(x),
+        se = FALSE, linewidth = 1.5, lty = "dashed"
+      ) +
+      scale_x_continuous(
+        breaks = if (max(df_long$rep_num, na.rm = TRUE) > 6) seq(0, 12, 2) else 1:6
+      ) +
+      labs(
+        title = "Noun vs pronoun rate across repetitions",
+        x = "Repetition",
+        y = "Rate",
+        color = "POS"
+      ) +
+      theme_minimal() +
+      theme(legend.position = "bottom")
+  })
+
+  output$entropy_plot <- renderPlot({
+    req(input$rep)
+
+    if (!"pos_entropy" %in% names(df)) {
+      return(NULL)
+    }
+
+    df0 <- df
+
+    if (input$stage_one_only) {
+      df0 <- df0 |>
+        filter(stage_num == 1)
+    }
+
+    df2 <- df0 |>
+      filter(dataset_id %in% input$dataset) |>
+      filter(input$rep[1] <= rep_num & rep_num <= input$rep[2]) |>
+      filter(group_size %in% input$group_size) |>
+      filter(option_size %in% input$option_size) |>
+      filter(population %in% input$population) |>
+      filter(modality %in% input$modality) |>
+      filter(feedback %in% input$feedback) |>
+      filter(backchannel %in% input$backchannel) |>
+      filter(partner_constancy %in% input$partner_constancy) |>
+      filter(!is.na(pos_entropy))
+
+    if (nrow(df2) == 0) {
+      return(NULL)
+    }
+
+    make_line_plot(
+      df2, "pos_entropy",
+      input$grouping, input$faceting, input$indiv_lines, input$stage_one_only,
+      "POS entropy across repetitions",
+      "Entropy", c(0.85, 0.75)
+    )
+  })
+
+  output$determiner_plot <- renderPlot({
+    req(input$rep)
+
+    if (!"det_rate" %in% names(df)) {
+      return(NULL)
+    }
+
+    df0 <- df
+
+    if (input$stage_one_only) {
+      df0 <- df0 |>
+        filter(stage_num == 1)
+    }
+
+    df2 <- df0 |>
+      filter(dataset_id %in% input$dataset) |>
+      filter(input$rep[1] <= rep_num & rep_num <= input$rep[2]) |>
+      filter(group_size %in% input$group_size) |>
+      filter(option_size %in% input$option_size) |>
+      filter(population %in% input$population) |>
+      filter(modality %in% input$modality) |>
+      filter(feedback %in% input$feedback) |>
+      filter(backchannel %in% input$backchannel) |>
+      filter(partner_constancy %in% input$partner_constancy) |>
+      filter(!is.na(det_rate))
+
+    if (nrow(df2) == 0) {
+      return(NULL)
+    }
+
+    make_line_plot(
+      df2, "det_rate",
+      input$grouping, input$faceting, input$indiv_lines, input$stage_one_only,
+      "Determiner rate across repetitions",
+      "Determiners per token", c(0.85, 0.75)
+    )
+  })
+
+  output$modifier_plot <- renderPlot({
+    req(input$rep)
+
+    if (!"adj_rate" %in% names(df)) {
+      return(NULL)
+    }
+
+    df0 <- df
+
+    if (input$stage_one_only) {
+      df0 <- df0 |>
+        filter(stage_num == 1)
+    }
+
+    df2 <- df0 |>
+      filter(dataset_id %in% input$dataset) |>
+      filter(input$rep[1] <= rep_num & rep_num <= input$rep[2]) |>
+      filter(group_size %in% input$group_size) |>
+      filter(option_size %in% input$option_size) |>
+      filter(population %in% input$population) |>
+      filter(modality %in% input$modality) |>
+      filter(feedback %in% input$feedback) |>
+      filter(backchannel %in% input$backchannel) |>
+      filter(partner_constancy %in% input$partner_constancy)
+
+    if (!"adv_rate" %in% names(df2)) {
+      df2$adv_rate <- 0
+    }
+
+    df2 <- df2 |>
+      mutate(modifier_rate = adj_rate + adv_rate) |>
+      filter(!is.na(modifier_rate))
+
+    if (nrow(df2) == 0) {
+      return(NULL)
+    }
+
+    make_line_plot(
+      df2, "modifier_rate",
+      input$grouping, input$faceting, input$indiv_lines, input$stage_one_only,
+      "Modifier rate across repetitions",
+      "Adjectives + adverbs per token", c(0.85, 0.75)
+    )
+  })
+
+  output$modifier_noun_plot <- renderPlot({
+    req(input$rep)
+
+    if (!"adj_rate" %in% names(df) || !"noun_rate" %in% names(df)) {
+      return(NULL)
+    }
+
+    df0 <- df
+
+    if (input$stage_one_only) {
+      df0 <- df0 |>
+        filter(stage_num == 1)
+    }
+
+    df2 <- df0 |>
+      filter(dataset_id %in% input$dataset) |>
+      filter(input$rep[1] <= rep_num & rep_num <= input$rep[2]) |>
+      filter(group_size %in% input$group_size) |>
+      filter(option_size %in% input$option_size) |>
+      filter(population %in% input$population) |>
+      filter(modality %in% input$modality) |>
+      filter(feedback %in% input$feedback) |>
+      filter(backchannel %in% input$backchannel) |>
+      filter(partner_constancy %in% input$partner_constancy)
+
+    if (!"adv_rate" %in% names(df2)) {
+      df2$adv_rate <- 0
+    }
+
+    df2 <- df2 |>
+      mutate(
+        modifier_rate = adj_rate + adv_rate,
+        modifier_noun_ratio = ifelse(noun_rate > 0, modifier_rate / noun_rate, NA_real_)
+      ) |>
+      filter(!is.na(modifier_noun_ratio))
+
+    if (nrow(df2) == 0) {
+      return(NULL)
+    }
+
+    make_line_plot(
+      df2, "modifier_noun_ratio",
+      input$grouping, input$faceting, input$indiv_lines, input$stage_one_only,
+      "Modifier-to-noun ratio across repetitions",
+      "Modifiers / nouns", c(0.85, 0.75)
+    )
+  })
 
 }
 
