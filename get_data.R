@@ -21,10 +21,44 @@ compute_hedge_pos_summary <- function(messages_df, trials_df) {
   )
 
   # NEGATION 
-  neg_pattern <- "\\b(not|never|no|none|nothing|nowhere|neither|nor|cannot)\\b|n't\\b"
+  neg_pattern <- paste0(
+    "\\b(",
+    paste(
+      c(
+        # core negation
+        "not","never","no","none","nothing","nowhere",
+        "neither","nor","cannot",
 
-  # QUESTIONS 
-  wh_pattern_start <- "^\\s*(what|where|who|when|why|how|which|whose)\\b"
+        # negative pronouns
+        "nobody","noone","no\\s+one",
+
+        # safe lexical negation
+        "without"
+      ),
+      collapse = "|"
+    ),
+    ")\\b|n't\\b"
+  )
+
+  # QUESTIONS
+  wh_pattern_start <- "^\\s*(what|where|who|whom|when|why|how|which|whose)\\b"
+  yn_question_start <- paste0(
+    "^\\s*(",
+    paste(
+      c(
+        "is","are","am","was","were",
+        "do","does","did",
+        "have","has","had",
+        "can","could",
+        "will","would",
+        "shall","should",
+        "may","might",
+        "must","ought"
+      ),
+      collapse = "|"
+    ),
+    ")\\b"
+  )
 
   # PREPOSITIONS 
   prep_words <- c(
@@ -35,47 +69,72 @@ compute_hedge_pos_summary <- function(messages_df, trials_df) {
     "since","through","throughout","till","to","toward","towards","under","underneath",
     "until","up","upon","with","within","without"
   )
-  prep_pattern <- paste0("\\b(", paste(prep_words, collapse="|"), ")\\b")
+  prep_pattern <- paste0("\\b(", paste(prep_words, collapse = "|"), ")\\b")
 
-  msgs <- messages_df |>
-    filter(role == "describer") |>
+
+  # BOTH matcher + describer for hedge/negation/prep
+  all_msgs <- messages_df |>
+    filter(role %in% c("describer", "matcher")) |>
     mutate(text_l = str_to_lower(text)) |>
     mutate(
       word_count = str_count(text_l, "\\b\\w+\\b"),
-
       hedge_count =
         rowSums(sapply(hedge_phrases, \(p) str_count(text_l, fixed(p)))) +
         rowSums(sapply(hedge_words, \(w) str_count(text_l, regex(paste0("\\b", w, "\\b"))))),
-
       negation_count = str_count(text_l, regex(neg_pattern)),
-
-      is_question = ifelse(
-        str_detect(text_l, fixed("?")) | str_detect(text_l, regex(wh_pattern_start)),
-        1L, 0L
-      ),
-
       prep_count = str_count(text_l, regex(prep_pattern))
     ) |>
     filter(word_count > 0) |>
-    select(trial_id, hedge_count, negation_count, is_question, prep_count, word_count)
+    select(trial_id, hedge_count, negation_count, prep_count, word_count)
 
-  pos <- msgs |>
+  all_pos <- all_msgs |>
     inner_join(trials_df |> select(trial_id, game_id, rep_num, stage_num), by = "trial_id") |>
     group_by(game_id, rep_num, stage_num) |>
     summarise(
       hedge_count    = sum(hedge_count, na.rm = TRUE),
       negation_count = sum(negation_count, na.rm = TRUE),
-      question_count = sum(is_question, na.rm = TRUE),
       prep_count     = sum(prep_count, na.rm = TRUE),
       word_count     = sum(word_count, na.rm = TRUE),
-
       hedge_rate     = hedge_count / word_count,
       negation_rate  = negation_count / word_count,
-      question_rate  = question_count / word_count,
       prep_rate      = prep_count / word_count,
       .groups = "drop"
+    )
+
+  # MATCHER only for questions
+  matcher_msgs <- messages_df |>
+    filter(role == "matcher") |>
+    mutate(text_l = str_to_lower(text)) |>
+    mutate(
+      matcher_word_count = str_count(text_l, "\\b\\w+\\b"),
+      is_question = ifelse(
+        str_detect(text_l, fixed("?")) |
+          str_detect(text_l, regex(wh_pattern_start)) |
+          str_detect(text_l, regex(yn_question_start)),
+        1L, 0L
+      )
     ) |>
-    select(game_id, rep_num, stage_num, hedge_rate, negation_rate, question_rate, prep_rate)
+    filter(matcher_word_count > 0) |>
+    select(trial_id, is_question, matcher_word_count)
+
+  matcher_q <- matcher_msgs |>
+    inner_join(trials_df |> select(trial_id, game_id, rep_num, stage_num), by = "trial_id") |>
+    group_by(game_id, rep_num, stage_num) |>
+    summarise(
+      question_count = sum(is_question, na.rm = TRUE),
+      matcher_word_count = sum(matcher_word_count, na.rm = TRUE),
+      question_rate = question_count / matcher_word_count,
+      .groups = "drop"
+    ) |>
+    select(game_id, rep_num, stage_num, question_rate)
+
+  # Join together
+  pos <- all_pos |>
+    left_join(matcher_q, by = c("game_id", "rep_num", "stage_num")) |>
+    select(
+      game_id, rep_num, stage_num,
+      hedge_rate, negation_rate, question_rate, prep_rate
+    )
 
   pos
 }
@@ -85,7 +144,7 @@ compute_udpipe_pos_rates <- function(messages_df, trials_df, model_path) {
   # trials_df must have: trial_id, game_id, rep_num, stage_num
 
   msgs <- messages_df |>
-    filter(role == "describer") |>
+    filter(role %in% c("describer", "matcher")) |>
     mutate(text = ifelse(is.na(text), "", text)) |>
     select(trial_id, text)
 
