@@ -18,9 +18,6 @@ if (source == "cached") {
   file_loc <- "cached_data"
   check_cache(file_loc)
   df <- read_csv(here(file_loc, "per_game_summary.csv"))
-
-  pos_df <- read_csv(here(file_loc, "per_game_pos_summary.csv"))
-  df <- df |> left_join(pos_df, by = c("game_id", "rep_num", "stage_num"))
 }
 
 
@@ -51,7 +48,7 @@ make_line_plot <- function(df, y, grouping, faceting, indiv_lines, stage_one_onl
 
   if (indiv_lines) {
     p <- p +
-      geom_line(aes(group = if (stage_one_only) game_id else interaction(game_id, stage_num)), alpha = 0.05)
+      geom_line(aes(group = game_id), alpha = 0.05)
   }
 
   p <- p +
@@ -121,13 +118,8 @@ ui <- fluidPage(
       sliderInput(
         "rep",
         "Repetition(s):",
-        min = min(df$rep_num), max = max(df$rep_num),
+        min = 1, max = 13,
         value = c(1, 6)
-      ),
-      checkboxInput(
-        "stage_one_only",
-        "Only include first stage data",
-        value = TRUE
       ),
       checkboxGroupInput(
         "group_size",
@@ -195,6 +187,11 @@ ui <- fluidPage(
         "Show lines per game",
         value = TRUE
       ),
+      checkboxInput(
+        "stage_one_only",
+        "Only include first stage data",
+        value = TRUE
+      ),
       selectInput(
         "dataset",
         "Dataset:",
@@ -215,7 +212,19 @@ ui <- fluidPage(
         tabPanel(
           title = "PoS analyses",
           style = "padding: 15px 0px",
-          plotOutput("hedge_plot")
+          plotOutput("hedge_plot"),
+          plotOutput("prep_plot"),
+          plotOutput("pos_stack_plot", height = 350),
+          plotOutput("content_ratio_plot"),
+          plotOutput("content_ratio_line_plot"),
+          plotOutput("modifier_plot"),
+          plotOutput("function_breakdown_plot", height = 350),
+          plotOutput("noun_pronoun_plot"),
+          plotOutput("entropy_plot"),
+          plotOutput("determiner_plot"),
+          plotOutput("modifier_noun_plot"),
+          plotOutput("negation_plot"),
+          plotOutput("question_plot")
         ),
         tabPanel(
           title = "Embedding analyses",
@@ -233,7 +242,7 @@ ui <- fluidPage(
 ###### Server & plots ######
 server <- function(input, output, session) {
   source <- "cached"
-  
+
   if (source == "redivis") {
     con <- redivis$user("mcfrank")$dataset("refbank:2zy7")
     df <- con$table("per_game_summary:bsw0")$to_tibble()
@@ -244,12 +253,11 @@ server <- function(input, output, session) {
     check_cache(file_loc)
     df <- read_csv(here(file_loc, "per_game_summary.csv"))
 
-    pos_df <- read_csv(here(file_loc, "per_game_pos_summary.csv"))
+    pos_path <- here(file_loc, "per_game_pos_summary.csv")
     if (file.exists(pos_path)) {
       pos_df <- read_csv(pos_path)
       df <- df |> left_join(pos_df, by = c("game_id", "rep_num", "stage_num"))
     }
-
   }
 
   df <- df |> filter(confederates == "no")
@@ -261,22 +269,6 @@ server <- function(input, output, session) {
     updateCheckboxGroupInput(session, "option_size", inline = T, choices = sort(unique(df$option_size)), selected = unique(df$option_size))
     updateCheckboxGroupInput(session, "population", inline = T, choices = sort(unique(df$population)), selected = unique(df$population))
     updateCheckboxGroupInput(session, "modality", inline = T, choices = sort(unique(df$modality)), selected = unique(df$modality))
-  })
-
-  observeEvent(input$first_stage_only, {
-    rounds <- if (input$first_stage_only) first_stage_rounds else all_rounds
-
-    # Keep current value if it's still valid, otherwise reset
-    current <- isolate(input$repetition)
-    new_val <- if (current %in% rounds) current else min(rounds)
-
-    updateSliderInput(
-      session,
-      "repetition",
-      min   = min(rounds),
-      max   = max(rounds),
-      value = new_val
-    )
   })
 
   output$word_plot <- renderPlot({
@@ -504,8 +496,13 @@ server <- function(input, output, session) {
       "Cosine similarity", c(0.85, 0.75)
     )
   })
+
   output$hedge_plot <- renderPlot({
     req(input$rep)
+
+    if (!"hedge_rate" %in% names(df)) {
+      return(NULL)
+    }
 
     if (input$stage_one_only) {
       df <- df |>
@@ -535,6 +532,552 @@ server <- function(input, output, session) {
       "Hedges per word", c(0.85, 0.75)
     ) +
       coord_cartesian(ylim = c(0, 0.15))
+  })
+
+  output$negation_plot <- renderPlot({
+    req(input$rep)
+
+    if (!"negation_rate" %in% names(df)) {
+      return(NULL)
+    }
+
+    if (input$stage_one_only) {
+      df <- df |>
+        filter(stage_num == 1)
+    }
+
+    df2 <- df |>
+      filter(dataset_id %in% input$dataset) |>
+      filter(input$rep[1] <= rep_num & rep_num <= input$rep[2]) |>
+      filter(group_size %in% input$group_size) |>
+      filter(option_size %in% input$option_size) |>
+      filter(population %in% input$population) |>
+      filter(modality %in% input$modality) |>
+      filter(feedback %in% input$feedback) |>
+      filter(backchannel %in% input$backchannel) |>
+      filter(partner_constancy %in% input$partner_constancy) |>
+      filter(!is.na(negation_rate))
+
+    if (nrow(df2) == 0) {
+      return(NULL)
+    }
+
+    make_line_plot(
+      df2, "negation_rate",
+      input$grouping, input$faceting, input$indiv_lines, input$stage_one_only,
+      "Negation rate across repetitions",
+      "Negations per word", c(0.85, 0.75)
+    ) +
+      coord_cartesian(ylim = c(0, 0.15))
+  })
+
+  output$question_plot <- renderPlot({
+    req(input$rep)
+
+    if (!"question_rate" %in% names(df)) {
+      return(NULL)
+    }
+
+    if (input$stage_one_only) {
+      df <- df |>
+        filter(stage_num == 1)
+    }
+
+    df2 <- df |>
+      filter(dataset_id %in% input$dataset) |>
+      filter(input$rep[1] <= rep_num & rep_num <= input$rep[2]) |>
+      filter(group_size %in% input$group_size) |>
+      filter(option_size %in% input$option_size) |>
+      filter(population %in% input$population) |>
+      filter(modality %in% input$modality) |>
+      filter(feedback %in% input$feedback) |>
+      filter(backchannel %in% input$backchannel) |>
+      filter(partner_constancy %in% input$partner_constancy) |>
+      filter(!is.na(question_rate))
+
+    if (nrow(df2) == 0) {
+      return(NULL)
+    }
+
+    make_line_plot(
+      df2, "question_rate",
+      input$grouping, input$faceting, input$indiv_lines, input$stage_one_only,
+      "Question rate across repetitions",
+      "Questions per word", c(0.85, 0.75)
+    ) +
+      coord_cartesian(ylim = c(0, 0.15))
+  })
+
+  output$prep_plot <- renderPlot({
+    req(input$rep)
+
+    if (!"prep_rate" %in% names(df)) {
+      return(NULL)
+    }
+
+    if (input$stage_one_only) {
+      df <- df |>
+        filter(stage_num == 1)
+    }
+
+    df2 <- df |>
+      filter(dataset_id %in% input$dataset) |>
+      filter(input$rep[1] <= rep_num & rep_num <= input$rep[2]) |>
+      filter(group_size %in% input$group_size) |>
+      filter(option_size %in% input$option_size) |>
+      filter(population %in% input$population) |>
+      filter(modality %in% input$modality) |>
+      filter(feedback %in% input$feedback) |>
+      filter(backchannel %in% input$backchannel) |>
+      filter(partner_constancy %in% input$partner_constancy) |>
+      filter(!is.na(prep_rate))
+
+    if (nrow(df2) == 0) {
+      return(NULL)
+    }
+
+    make_line_plot(
+      df2, "prep_rate",
+      input$grouping, input$faceting, input$indiv_lines, input$stage_one_only,
+      "Preposition rate across repetitions",
+      "Prepositions per word", c(0.85, 0.75)
+    ) +
+      coord_cartesian(ylim = c(0, 0.25))
+  })
+
+  output$pos_stack_plot <- renderPlot({
+    req(input$rep)
+
+    pos_cols <- c("noun_rate", "verb_rate", "adj_rate", "pron_rate", "adp_rate", "det_rate", "aux_rate")
+    if (!all(pos_cols %in% names(df))) {
+      return(NULL)
+    }
+
+    df0 <- df
+
+    if (input$stage_one_only) {
+      df0 <- df0 |> filter(stage_num == 1)
+    }
+
+    df2 <- df0 |>
+      filter(dataset_id %in% input$dataset) |>
+      filter(input$rep[1] <= rep_num & rep_num <= input$rep[2]) |>
+      filter(group_size %in% input$group_size) |>
+      filter(option_size %in% input$option_size) |>
+      filter(population %in% input$population) |>
+      filter(modality %in% input$modality) |>
+      filter(feedback %in% input$feedback) |>
+      filter(backchannel %in% input$backchannel) |>
+      filter(partner_constancy %in% input$partner_constancy)
+
+    if (nrow(df2) == 0) {
+      return(NULL)
+    }
+
+    df_long <- df2 |>
+      select(rep_num, trials, all_of(pos_cols)) |>
+      pivot_longer(cols = all_of(pos_cols), names_to = "pos", values_to = "rate") |>
+      filter(!is.na(rate)) |>
+      group_by(rep_num, pos) |>
+      summarise(rate = weighted.mean(rate, w = trials, na.rm = TRUE), .groups = "drop")
+
+    ggplot(df_long, aes(x = rep_num, y = rate, fill = pos)) +
+      geom_area(position = "fill", alpha = 0.9) +
+      scale_fill_brewer(palette = "RdBu") +
+      scale_x_continuous(breaks = if (max(df_long$rep_num, na.rm = TRUE) > 6) seq(0, 12, 2) else 1:6) +
+      labs(
+        title = "POS composition across repetitions",
+        x = "Repetition",
+        y = "Share of tokens (stacked)",
+        fill = "POS"
+      ) +
+      theme_minimal() +
+      theme(legend.position = "bottom")
+  })
+
+  output$content_ratio_plot <- renderPlot({
+    req(input$rep)
+
+    if (!all(c("content_rate", "function_rate") %in% names(df))) {
+      return(NULL)
+    }
+
+    df0 <- df
+
+    if (input$stage_one_only) {
+      df0 <- df0 |> filter(stage_num == 1)
+    }
+
+    df2 <- df0 |>
+      filter(dataset_id %in% input$dataset) |>
+      filter(input$rep[1] <= rep_num & rep_num <= input$rep[2]) |>
+      filter(group_size %in% input$group_size) |>
+      filter(option_size %in% input$option_size) |>
+      filter(population %in% input$population) |>
+      filter(modality %in% input$modality) |>
+      filter(feedback %in% input$feedback) |>
+      filter(backchannel %in% input$backchannel) |>
+      filter(partner_constancy %in% input$partner_constancy)
+
+    if (nrow(df2) == 0) {
+      return(NULL)
+    }
+
+    # Aggregate
+    df_long <- df2 |>
+      select(rep_num, trials, content_rate, function_rate) |>
+      tidyr::pivot_longer(
+        cols = c(content_rate, function_rate),
+        names_to = "type",
+        values_to = "rate"
+      ) |>
+      group_by(rep_num, type) |>
+      summarise(
+        rate = weighted.mean(rate, w = trials, na.rm = TRUE),
+        .groups = "drop"
+      )
+
+    ggplot(df_long, aes(x = rep_num, y = rate, fill = type)) +
+      geom_area(position = "fill", alpha = 0.9) +
+      scale_fill_brewer(palette = "RdBu") +
+      scale_x_continuous(
+        breaks = if (max(df_long$rep_num, na.rm = TRUE) > 6) {
+          seq(0, 12, 2)
+        } else {
+          1:6
+        }
+      ) +
+      labs(
+        title = "Content vs Function composition across repetitions",
+        x = "Repetition",
+        y = "Share of tokens",
+        fill = "Word type"
+      ) +
+      theme_minimal() +
+      theme(legend.position = "bottom")
+  })
+  output$content_ratio_line_plot <- renderPlot({
+    req(input$rep)
+
+    if (!"content_function_ratio" %in% names(df)) {
+      return(NULL)
+    }
+
+    df0 <- df
+
+    if (input$stage_one_only) {
+      df0 <- df0 |>
+        filter(stage_num == 1)
+    }
+
+    df2 <- df0 |>
+      filter(dataset_id %in% input$dataset) |>
+      filter(input$rep[1] <= rep_num & rep_num <= input$rep[2]) |>
+      filter(group_size %in% input$group_size) |>
+      filter(option_size %in% input$option_size) |>
+      filter(population %in% input$population) |>
+      filter(modality %in% input$modality) |>
+      filter(feedback %in% input$feedback) |>
+      filter(backchannel %in% input$backchannel) |>
+      filter(partner_constancy %in% input$partner_constancy) |>
+      filter(!is.na(content_function_ratio))
+
+    if (nrow(df2) == 0) {
+      return(NULL)
+    }
+
+    make_line_plot(
+      df2, "content_function_ratio",
+      input$grouping, input$faceting, input$indiv_lines, input$stage_one_only,
+      "Content-to-function ratio across repetitions",
+      "Content / function", c(0.85, 0.75)
+    )
+  })
+
+  output$function_breakdown_plot <- renderPlot({
+    req(input$rep)
+
+    func_cols <- c("pron_rate", "det_rate", "adp_rate", "aux_rate", "cconj_rate", "sconj_rate")
+    if (!all(func_cols %in% names(df))) {
+      return(NULL)
+    }
+
+    df0 <- df
+
+    if (input$stage_one_only) {
+      df0 <- df0 |>
+        filter(stage_num == 1)
+    }
+
+    df2 <- df0 |>
+      filter(dataset_id %in% input$dataset) |>
+      filter(input$rep[1] <= rep_num & rep_num <= input$rep[2]) |>
+      filter(group_size %in% input$group_size) |>
+      filter(option_size %in% input$option_size) |>
+      filter(population %in% input$population) |>
+      filter(modality %in% input$modality) |>
+      filter(feedback %in% input$feedback) |>
+      filter(backchannel %in% input$backchannel) |>
+      filter(partner_constancy %in% input$partner_constancy)
+
+    if (nrow(df2) == 0) {
+      return(NULL)
+    }
+
+    df_long <- df2 |>
+      select(rep_num, trials, all_of(func_cols)) |>
+      tidyr::pivot_longer(
+        cols = all_of(func_cols),
+        names_to = "pos",
+        values_to = "rate"
+      ) |>
+      filter(!is.na(rate)) |>
+      group_by(rep_num, pos) |>
+      summarise(
+        rate = weighted.mean(rate, w = trials, na.rm = TRUE),
+        .groups = "drop"
+      )
+
+    ggplot(df_long, aes(x = rep_num, y = rate, fill = pos)) +
+      geom_area(position = "fill", alpha = 0.9) +
+      scale_fill_brewer(palette = "RdBu") +
+      scale_x_continuous(
+        breaks = if (max(df_long$rep_num, na.rm = TRUE) > 6) seq(0, 12, 2) else 1:6
+      ) +
+      labs(
+        title = "Function-word composition across repetitions",
+        x = "Repetition",
+        y = "Share of function-word categories",
+        fill = "POS"
+      ) +
+      theme_minimal() +
+      theme(legend.position = "bottom")
+  })
+  output$noun_pronoun_plot <- renderPlot({
+    req(input$rep)
+
+    if (!all(c("noun_rate", "pron_rate") %in% names(df))) {
+      return(NULL)
+    }
+
+    df0 <- df
+
+    if (input$stage_one_only) {
+      df0 <- df0 |>
+        filter(stage_num == 1)
+    }
+
+    df2 <- df0 |>
+      filter(dataset_id %in% input$dataset) |>
+      filter(input$rep[1] <= rep_num & rep_num <= input$rep[2]) |>
+      filter(group_size %in% input$group_size) |>
+      filter(option_size %in% input$option_size) |>
+      filter(population %in% input$population) |>
+      filter(modality %in% input$modality) |>
+      filter(feedback %in% input$feedback) |>
+      filter(backchannel %in% input$backchannel) |>
+      filter(partner_constancy %in% input$partner_constancy)
+
+    if (nrow(df2) == 0) {
+      return(NULL)
+    }
+
+    df_long <- df2 |>
+      select(rep_num, trials, noun_rate, pron_rate) |>
+      tidyr::pivot_longer(
+        cols = c(noun_rate, pron_rate),
+        names_to = "type",
+        values_to = "rate"
+      ) |>
+      filter(!is.na(rate))
+
+    ggplot(df_long, aes(x = rep_num, y = rate, color = type)) +
+      geom_point(alpha = 0.05) +
+      geom_smooth(
+        aes(group = type, weight = trials),
+        method = "lm", formula = y ~ log(x),
+        se = FALSE, linewidth = 1.5, lty = "dashed"
+      ) +
+      scale_x_continuous(
+        breaks = if (max(df_long$rep_num, na.rm = TRUE) > 6) seq(0, 12, 2) else 1:6
+      ) +
+      labs(
+        title = "Noun vs pronoun rate across repetitions",
+        x = "Repetition",
+        y = "Rate",
+        color = "POS"
+      ) +
+      theme_minimal() +
+      theme(legend.position = "bottom")
+  })
+
+  output$entropy_plot <- renderPlot({
+    req(input$rep)
+
+    if (!"pos_entropy" %in% names(df)) {
+      return(NULL)
+    }
+
+    df0 <- df
+
+    if (input$stage_one_only) {
+      df0 <- df0 |>
+        filter(stage_num == 1)
+    }
+
+    df2 <- df0 |>
+      filter(dataset_id %in% input$dataset) |>
+      filter(input$rep[1] <= rep_num & rep_num <= input$rep[2]) |>
+      filter(group_size %in% input$group_size) |>
+      filter(option_size %in% input$option_size) |>
+      filter(population %in% input$population) |>
+      filter(modality %in% input$modality) |>
+      filter(feedback %in% input$feedback) |>
+      filter(backchannel %in% input$backchannel) |>
+      filter(partner_constancy %in% input$partner_constancy) |>
+      filter(!is.na(pos_entropy))
+
+    if (nrow(df2) == 0) {
+      return(NULL)
+    }
+
+    make_line_plot(
+      df2, "pos_entropy",
+      input$grouping, input$faceting, input$indiv_lines, input$stage_one_only,
+      "POS entropy across repetitions",
+      "Entropy", c(0.85, 0.75)
+    )
+  })
+
+  output$determiner_plot <- renderPlot({
+    req(input$rep)
+
+    if (!"det_rate" %in% names(df)) {
+      return(NULL)
+    }
+
+    df0 <- df
+
+    if (input$stage_one_only) {
+      df0 <- df0 |>
+        filter(stage_num == 1)
+    }
+
+    df2 <- df0 |>
+      filter(dataset_id %in% input$dataset) |>
+      filter(input$rep[1] <= rep_num & rep_num <= input$rep[2]) |>
+      filter(group_size %in% input$group_size) |>
+      filter(option_size %in% input$option_size) |>
+      filter(population %in% input$population) |>
+      filter(modality %in% input$modality) |>
+      filter(feedback %in% input$feedback) |>
+      filter(backchannel %in% input$backchannel) |>
+      filter(partner_constancy %in% input$partner_constancy) |>
+      filter(!is.na(det_rate))
+
+    if (nrow(df2) == 0) {
+      return(NULL)
+    }
+
+    make_line_plot(
+      df2, "det_rate",
+      input$grouping, input$faceting, input$indiv_lines, input$stage_one_only,
+      "Determiner rate across repetitions",
+      "Determiners per token", c(0.85, 0.75)
+    )
+  })
+
+  output$modifier_plot <- renderPlot({
+    req(input$rep)
+
+    if (!"adj_rate" %in% names(df)) {
+      return(NULL)
+    }
+
+    df0 <- df
+
+    if (input$stage_one_only) {
+      df0 <- df0 |>
+        filter(stage_num == 1)
+    }
+
+    df2 <- df0 |>
+      filter(dataset_id %in% input$dataset) |>
+      filter(input$rep[1] <= rep_num & rep_num <= input$rep[2]) |>
+      filter(group_size %in% input$group_size) |>
+      filter(option_size %in% input$option_size) |>
+      filter(population %in% input$population) |>
+      filter(modality %in% input$modality) |>
+      filter(feedback %in% input$feedback) |>
+      filter(backchannel %in% input$backchannel) |>
+      filter(partner_constancy %in% input$partner_constancy)
+
+    if (!"adv_rate" %in% names(df2)) {
+      df2$adv_rate <- 0
+    }
+
+    df2 <- df2 |>
+      mutate(modifier_rate = adj_rate + adv_rate) |>
+      filter(!is.na(modifier_rate))
+
+    if (nrow(df2) == 0) {
+      return(NULL)
+    }
+
+    make_line_plot(
+      df2, "modifier_rate",
+      input$grouping, input$faceting, input$indiv_lines, input$stage_one_only,
+      "Modifier rate across repetitions",
+      "Adjectives + adverbs per token", c(0.85, 0.75)
+    )
+  })
+
+  output$modifier_noun_plot <- renderPlot({
+    req(input$rep)
+
+    if (!"adj_rate" %in% names(df) || !"noun_rate" %in% names(df)) {
+      return(NULL)
+    }
+
+    df0 <- df
+
+    if (input$stage_one_only) {
+      df0 <- df0 |>
+        filter(stage_num == 1)
+    }
+
+    df2 <- df0 |>
+      filter(dataset_id %in% input$dataset) |>
+      filter(input$rep[1] <= rep_num & rep_num <= input$rep[2]) |>
+      filter(group_size %in% input$group_size) |>
+      filter(option_size %in% input$option_size) |>
+      filter(population %in% input$population) |>
+      filter(modality %in% input$modality) |>
+      filter(feedback %in% input$feedback) |>
+      filter(backchannel %in% input$backchannel) |>
+      filter(partner_constancy %in% input$partner_constancy)
+
+    if (!"adv_rate" %in% names(df2)) {
+      df2$adv_rate <- 0
+    }
+
+    df2 <- df2 |>
+      mutate(
+        modifier_rate = adj_rate + adv_rate,
+        modifier_noun_ratio = ifelse(noun_rate > 0, modifier_rate / noun_rate, NA_real_)
+      ) |>
+      filter(!is.na(modifier_noun_ratio))
+
+    if (nrow(df2) == 0) {
+      return(NULL)
+    }
+
+    make_line_plot(
+      df2, "modifier_noun_ratio",
+      input$grouping, input$faceting, input$indiv_lines, input$stage_one_only,
+      "Modifier-to-noun ratio across repetitions",
+      "Modifiers / nouns", c(0.85, 0.75)
+    )
   })
 }
 
