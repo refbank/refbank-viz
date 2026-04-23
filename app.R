@@ -8,7 +8,7 @@ source(here("theme.R"))
 source(here("get_data.R"))
 
 source <- "cached"
-next_version <- T
+next_version <- TRUE
 
 if (source == "redivis") {
   con <- redivis$user("mcfrank")$dataset("refbank:2zy7")
@@ -21,7 +21,7 @@ if (source == "cached") {
   df <- read_csv(here(file_loc, "per_game_summary.csv"))
 }
 
-
+df <- df |> filter(confederates == "no")
 
 option_sizes <- sort(unique(df$option_size))
 
@@ -136,7 +136,7 @@ make_stack_plot <- function(df, y, grouping, faceting, indiv_lines, stage_one_on
     scale_x_continuous(breaks = if (max(df$rep_num, na.rm = TRUE) > 6) seq(0, 12, 2) else 1:6) +
     labs(
       title = title, x = "Repetition", y = y_lab,
-      col = names(groupings)[groupings == grouping]
+      fill = names(groupings)[groupings == grouping]
     )
 
   if (faceting != "dataset_id") {
@@ -277,7 +277,7 @@ ui <- fluidPage(
 ###### Server & plots ######
 server <- function(input, output, session) {
   source <- "cached"
-  next_version <- T
+  next_version <- TRUE
   if (source == "redivis") {
     con <- redivis$user("mcfrank")$dataset("refbank:2zy7")
     df <- con$table("per_game_summary:bsw0")$to_tibble()
@@ -289,7 +289,6 @@ server <- function(input, output, session) {
     df <- read_csv(here(file_loc, "per_game_summary.csv"))
   }
 
-  df <- df |> filter(confederates == "no")
   option_sizes <- sort(unique(df$option_size))
 
   observe({
@@ -322,162 +321,75 @@ server <- function(input, output, session) {
       filter(backchannel %in% input$backchannel) |>
       filter(partner_constancy %in% input$partner_constancy)
   }
-  output$word_plot <- renderPlot({
-    req(input$rep)
 
-    df <- df |>
-      filter_to_input() |>
-      filter(!is.na(words))
+  make_line_output <- function(col, title, y_lab, legend_pos, ylim = NULL) {
+    renderPlot({
+      req(input$rep)
+      plot_df <- df |>
+        filter_to_input() |>
+        filter(!is.na(.data[[col]]))
+      if (nrow(plot_df) == 0) {
+        return(NULL)
+      }
+      p <- make_line_plot(
+        plot_df, col, input$grouping, input$faceting,
+        input$indiv_lines, input$stage_one_only,
+        title, y_lab, legend_pos
+      )
+      if (!is.null(ylim)) p <- p + coord_cartesian(ylim = ylim)
+      p
+    })
+  }
 
-    if (nrow(df) == 0) {
-      return(NULL)
-    }
+  output$word_plot <- make_line_output(
+    "words", "Reduction: Total speaker utterance length across repetitions",
+    "Length (words)", c(0.85, 0.75),
+    ylim = c(0, 50)
+  )
 
-    make_line_plot(
-      df, "words",
-      input$grouping, input$faceting, input$indiv_lines, input$stage_one_only,
-      "Reduction: Total speaker utterance length across repetitions",
-      "Length (words)", c(0.85, 0.75)
-    ) +
-      coord_cartesian(ylim = c(0, 50))
-  })
-
-  output$accuracy_plot <- renderPlot({
-    req(input$rep)
-
-    df <- df |>
-      filter_to_input() |>
-      filter(!is.na(accuracy))
-
-    if (nrow(df) == 0) {
-      return(NULL)
-    }
-
-    make_line_plot(
-      df, "accuracy",
-      input$grouping, input$faceting, input$indiv_lines, input$stage_one_only,
-      "Accuracy across repetitions",
+  output$accuracy_plot <-
+    make_line_output(
+      "accuracy", "Accuracy across repetitions",
       "Accuracy", c(0.85, 0.25)
     )
-  })
 
-  output$time_plot <- renderPlot({
-    req(input$rep)
-
-    df <- df |>
-      filter_to_input() |>
-      filter(!is.na(rt))
-
-    if (nrow(df) == 0) {
-      return(NULL)
-    }
-
-    make_line_plot(
-      df, "rt",
-      input$grouping, input$faceting, input$indiv_lines, input$stage_one_only,
-      "Response time across repetitions",
-      "Response time (s)", c(0.85, 0.75)
-    )
-  })
-
-  output$toprev_plot <- renderPlot({
-    req(input$rep)
+  output$time_plot <- make_line_output(
+    "rt", "Response time across repetitions",
+    "Response time (s)", c(0.85, 0.75)
+  )
 
 
-    df <- df |>
-      filter_to_input() |>
-      filter(!is.na(to_next))
+  output$toprev_plot <- make_line_output(
+    "to_next",
+    "Convergence: Similarity to previous round utterance within game",
+    "Cosine similarity", c(0.85, 0.25)
+  )
 
-    if (nrow(df) == 0) {
-      return(NULL)
-    }
+  output$diverge_plot <- make_line_output(
+    "diverge",
+    "Divergence: Similarity to other games within rounds",
+    "Cosine similarity", c(0.85, 0.75)
+  )
 
-    make_line_plot(
-      df, "to_next",
-      input$grouping, input$faceting, input$indiv_lines, input$stage_one_only,
-      "Convergence: Similarity to previous round utterance within game",
-      "Cosine similarity", c(0.85, 0.25)
-    )
-  })
-
-  output$diverge_plot <- renderPlot({
-    req(input$rep)
-
-    df <- df |>
-      filter_to_input() |>
-      filter(!is.na(diverge))
-
-    if (nrow(df) == 0) {
-      return(NULL)
-    }
-
-    make_line_plot(
-      df, "diverge",
-      input$grouping, input$faceting, input$indiv_lines, input$stage_one_only,
-      "Divergence: Similarity to other games within rounds",
-      "Cosine similarity", c(0.85, 0.75)
-    )
-  })
-
-  output$tardiff_plot <- renderPlot({
-    req(input$rep)
-
-    df <- df |>
-      filter_to_input() |>
-      filter(!is.na(diff))
-
-    if (nrow(df) == 0) {
-      return(NULL)
-    }
+  output$tardiff_plot <- make_line_output(
+    "diff",
+    "Differentiation: Similarity to other same-round targets within game",
+    "Cosine similarity", c(0.85, 0.75)
+  )
 
 
-    make_line_plot(
-      df, "diff",
-      input$grouping, input$faceting, input$indiv_lines, input$stage_one_only,
-      "Differentiation: Similarity to other same-round targets within game",
-      "Cosine similarity", c(0.85, 0.75)
-    )
-  })
-
-  output$idio_plot <- renderPlot({
-    req(input$rep)
-
-    df <- df |>
-      filter_to_input() |>
-      filter(!is.na(idiosyncrasy))
-
-    if (nrow(df) == 0) {
-      return(NULL)
-    }
-
-    make_line_plot(
-      df, "idiosyncrasy",
-      input$grouping, input$faceting, input$indiv_lines, input$stage_one_only,
-      "Idiosyncrasy: Similarity to mean of round 1 utterances",
-      "Cosine similarity", c(0.85, 0.75)
-    )
-  })
-
-  output$hedge_plot <- renderPlot({
-    req(input$rep)
-
-    df <- df |>
-      filter_to_input() |>
-      filter(!is.na(n_hedges))
+  output$idio_plot <- make_line_output(
+    "idiosyncrasy",
+    "Idiosyncrasy: Similarity to mean of round 1 utterances",
+    "Cosine similarity", c(0.85, 0.75)
+  )
 
 
-    if (nrow(df) == 0) {
-      return(NULL)
-    }
-
-    make_line_plot(
-      df, "n_hedges",
-      input$grouping, input$faceting, input$indiv_lines, input$stage_one_only,
-      "Hedges across repetitions",
-      "Hedges per trial", c(0.85, 0.75)
-    ) +
-      coord_cartesian(ylim = c(0, 2))
-  })
+  output$hedge_plot <- make_line_output("n_hedges",
+    "Hedges across repetitions",
+    "Hedges per trial", c(0.85, 0.75),
+    ylim = c(0, 2)
+  )
 
   output$def_plot <- renderPlot({
     req(input$rep)
@@ -485,7 +397,6 @@ server <- function(input, output, session) {
 
     df <- df |>
       filter_to_input() |>
-      group_by(across(all_of(metadata_cols))) |>
       pivot_longer(c("bare", "definite", "indefinite", "quantifier", "proper_noun", "demonstrative", "possessive"), names_to = "np_type", values_to = "np_count") |>
       filter(!is.na(np_type), !is.na(np_count))
 
@@ -508,7 +419,6 @@ server <- function(input, output, session) {
 
     df <- df |>
       filter_to_input() |>
-      group_by(across(all_of(metadata_cols))) |>
       pivot_longer(c(
         "NOUN", "VERB",
         "DET", "PRON", "MODIFIER", "FUNCTION"

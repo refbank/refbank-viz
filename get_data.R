@@ -6,7 +6,7 @@ library(redivis)
 # else (blank local version file, download & save (maybe?) – time how long this takes?, write local version file)
 # Update workflow
 
-check_cache <- function(file_loc, next_version = F) {
+check_cache <- function(file_loc, next_version = FALSE) {
   if (!file.exists(here(file_loc))) {
     dir.create(file.path(here(), file_loc))
   }
@@ -38,7 +38,6 @@ check_cache <- function(file_loc, next_version = F) {
   }
   if (cached_version != current_version) {
     message("Updating cache.")
-    writeLines("", here(file_loc, "version.txt"))
     con <- redivis$user("mcfrank")$dataset("refbank:2zy7")
     if (next_version) {
       con <- redivis$user("mcfrank")$dataset("refbank:2zy7", version = "next")
