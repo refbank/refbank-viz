@@ -8,7 +8,7 @@ source(here("theme.R"))
 source(here("get_data.R"))
 
 source <- "cached"
-next_version <- TRUE
+next_version <- FALSE
 
 if (source == "redivis") {
   con <- redivis$user("mcfrank")$dataset("refbank:2zy7")
@@ -277,7 +277,7 @@ ui <- fluidPage(
 ###### Server & plots ######
 server <- function(input, output, session) {
   source <- "cached"
-  next_version <- TRUE
+  next_version <- FALSE
   if (source == "redivis") {
     con <- redivis$user("mcfrank")$dataset("refbank:2zy7")
     df <- con$table("per_game_summary:bsw0")$to_tibble()
@@ -292,7 +292,7 @@ server <- function(input, output, session) {
   option_sizes <- sort(unique(df$option_size))
 
   observe({
-    updateSelectInput(session, "dataset", choices = unique(df$dataset_id), selected = setdiff(unique(df$dataset_id), c("yoon2019_audience")))
+    updateSelectInput(session, "dataset", choices = unique(df$dataset_id), selected = setdiff(unique(df$dataset_id), c()))
     updateCheckboxGroupInput(session, "group_size", inline = T, choices = sort(unique(df$group_size)), selected = unique(df$group_size))
     updateCheckboxGroupInput(session, "option_size", inline = T, choices = sort(unique(df$option_size)), selected = unique(df$option_size))
     updateCheckboxGroupInput(session, "population", inline = T, choices = sort(unique(df$population)), selected = unique(df$population))
@@ -344,7 +344,7 @@ server <- function(input, output, session) {
   output$word_plot <- make_line_output(
     "words", "Reduction: Total speaker utterance length across repetitions",
     "Length (words)", c(0.85, 0.75),
-    ylim = c(0, 50)
+    ylim = c(0, 60)
   )
 
   output$accuracy_plot <-
@@ -388,7 +388,7 @@ server <- function(input, output, session) {
   output$hedge_plot <- make_line_output("n_hedges",
     "Hedges across repetitions",
     "Hedges per trial", c(0.85, 0.75),
-    ylim = c(0, 2)
+    ylim = c(0, 5)
   )
 
   output$def_plot <- renderPlot({
